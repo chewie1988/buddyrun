@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0f1e" />
+  
+  
+  
+  
+  
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="manifest" href="/buddyrun/manifest.json" />
+  <link rel="apple-touch-icon" href="/buddyrun/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="BuddyRun" />
+  <title>BuddyRun — The Perfect Buddy</title>
+  <style>
+    .install-bar{display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#6366f1;color:#fff;border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;white-space:nowrap;box-shadow:0 4px 20px #0006;cursor:pointer}
+  </style>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body,#app{min-height:100vh;background:#0a0f1e;font-family:'DM Sans','Segoe UI',sans-serif;color:#f9fafb}
+    body{overscroll-behavior:none}
+    input,select,textarea,button{font-family:inherit}
+    button{cursor:pointer}
+    select option{background:#111827}
+  </style>
+</head>
+<body>
+<div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#6366f1;font-size:18px;font-weight:700;gap:12px"><span>🏃</span> Loading BuddyRun...</div></div>
+  <!-- Preact UMD - loads as global variables, works everywhere -->
+  <script src="https://cdn.jsdelivr.net/npm/preact@10.19.2/dist/preact.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/preact@10.19.2/hooks/dist/hooks.umd.js"></script>
+
+<script>
+
+// Safety check - if libraries haven't loaded show a message
+if(!window.preact||!window.preactHooks){
+  document.getElementById('app').innerHTML='<div style="color:white;padding:30px;font-family:sans-serif;text-align:center"><h2>⚠️ Loading failed</h2><p style="color:#6b7280;margin-top:10px">Could not load required libraries. Please check your internet connection and refresh.</p><p style="color:#6366f1;margin-top:20px;font-size:12px">Error: preact='+!!window.preact+' hooks='+!!window.preactHooks+'</p></div>';
+  throw new Error('Preact libraries not loaded');
+}
+const{h,render,Fragment}=window.preact;
+const{useState,useCallback}=window.preactHooks;
+
+const B={bg:"#0a0f1e",card:"#111827",cardBorder:"#1f2937",accent:"#6366f1",accentSoft:"#6366f115",lime:"#84cc16",limeSoft:"#84cc1615",teal:"#2dd4bf",red:"#f87171",green:"#4ade80",yellow:"#fbbf24",text:"#f9fafb",muted:"#6b7280",input:"#0d1117",purple:"#a78bfa"};
+const DURATIONS=[30,45,60,90,120,150];
+const SERVICES=["Bath & Brush","Full Groom","Nail Trim","Puppy Groom","De-shed Treatment","Flea Treatment"];
+const PALETTE=["#6366f1","#84cc16","#2dd4bf","#f59e0b","#fb7185","#60a5fa","#a78bfa","#34d399"];
+const FREQUENCIES=["Weekly","Fortnightly","Monthly","5 Weeks","6 Weeks","7 Weeks","8 Weeks","10 Weeks","12 Weeks","As Needed","Custom"];
+const PREF_DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday","No Preference"];
+const PREF_TIMES=["Early Morning (7-9am)","Morning (9-11am)","Midday (11am-1pm)","Afternoon (1-4pm)","Late Afternoon (4-6pm)","No Preference"];
+const CLIENT_STATUSES=["Active","Inactive","Waitlist","Lead","Deceased"];
+const STATUS_COLORS={"Active":"#4ade80","Inactive":"#6b7280","Waitlist":"#f59e0b","Lead":"#6366f1","Deceased":"#374151"};
+const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAYS_SHORT=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const HOURS=[7,8,9,10,11,12,13,14,15,16,17,18];
+const fmt=d=>d.toISOString().split("T")[0];
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const today=new Date();
+
+function usePersisted(key,def){
+  const[val,setVal]=useState(()=>{try{const s=localStorage.getItem("br_"+key);return s?JSON.parse(s):def;}catch{return def;}});
+  const set=useCallback(v=>{setVal(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("br_"+key,JSON.stringify(next));}catch{}return next;});},[key]);
+  return[val,set];
+}
+
+const initClients=[];
+const initSchedule=[];
+
+// UI Components
+const Avatar=({name,color,size=40})=>h('div',{style:{width:size,height:size,borderRadius:"50%",background:color+"25",border:"2px solid "+color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.33,fontWeight:800,color,flexShrink:0}},name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase());
+const Tag=({children,color=B.accent})=>h('span',{style:{background:color+"18",color,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}},children);
+const Btn=({onClick,children,variant="primary",small,full})=>{
+  const s={primary:{background:B.accent,color:"#fff",border:"none"},lime:{background:B.lime,color:"#0a0f1e",border:"none"},secondary:{background:"transparent",color:B.accent,border:"1px solid "+B.accent},ghost:{background:"transparent",color:B.muted,border:"1px solid "+B.cardBorder},danger:{background:"transparent",color:B.red,border:"1px solid "+B.red+"44"},teal:{background:B.teal,color:"#0a0f1e",border:"none"}};
+  return h('button',{onClick,style:{...s[variant],borderRadius:8,padding:small?"6px 14px":"10px 20px",fontSize:small?12:14,fontWeight:700,width:full?"100%":"auto"}},children);
+};
+const Inp=({label,value,onChange,placeholder,type="text"})=>h('div',{style:{display:"flex",flexDirection:"column",gap:4}},
+  label&&h('label',{style:{fontSize:11,color:B.muted,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}},label),
+  h('input',{type,value,onInput:e=>onChange(e.target.value),placeholder,style:{background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:14,outline:"none",width:"100%"}})
+);
+const Sel=({label,value,onChange,options})=>h('div',{style:{display:"flex",flexDirection:"column",gap:4}},
+  label&&h('label',{style:{fontSize:11,color:B.muted,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}},label),
+  h('select',{value,onChange:e=>onChange(e.target.value),style:{background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:14,outline:"none",width:"100%"}},
+    options.map(o=>h('option',{key:o.value??o,value:o.value??o},o.label??o))
+  )
+);
+const Modal=({title,onClose,children})=>h('div',{onClick:onClose,style:{position:"fixed",inset:0,background:"#00000099",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}},
+  h('div',{onClick:e=>e.stopPropagation(),style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:20,padding:24,width:"100%",maxWidth:500,maxHeight:"88vh",overflowY:"auto"}},
+    h('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}},
+      h('h3',{style:{margin:0,fontSize:18,color:B.text,fontWeight:800}},title),
+      h('button',{onClick:onClose,style:{background:"none",border:"none",color:B.muted,fontSize:24}},"×")
+    ),
+    children
+  )
+);
+const Toggle=({on,onChange,color=B.accent})=>h('div',{onClick:()=>onChange(!on),style:{width:44,height:24,borderRadius:12,background:on?color:B.cardBorder,cursor:"pointer",position:"relative",flexShrink:0,transition:"background 0.2s"}},
+  h('div',{style:{position:"absolute",top:3,left:on?23:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}})
+);
+
+// Address Link with map picker
+function AddressLink({address,postcode,children}){
+  const[show,setShow]=useState(false);
+  const full=address+(postcode?" "+postcode:"");
+  const enc=encodeURIComponent(full);
+  return h(Fragment,null,
+    h('span',{onClick:e=>{e.stopPropagation();setShow(true)},style:{color:B.accent,cursor:"pointer",textDecoration:"underline dotted"}},children||full),
+    show&&h('div',{onClick:()=>setShow(false),style:{position:"fixed",inset:0,background:"#00000088",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}},
+      h('div',{onClick:e=>e.stopPropagation(),style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:"20px 20px 0 0",padding:"20px 20px 40px",width:"100%",maxWidth:480}},
+        h('div',{style:{width:36,height:4,borderRadius:2,background:B.cardBorder,margin:"0 auto 16px"}}),
+        h('div',{style:{fontWeight:800,fontSize:15,color:B.text,marginBottom:4}},"Open in Maps"),
+        h('div',{style:{fontSize:12,color:B.muted,marginBottom:16}},"📍 "+full),
+        [["🟦","Google Maps","#4285f4","https://www.google.com/maps/search/?api=1&query="+enc],
+         ["🔷","Waze","#33ccff","https://waze.com/ul?q="+enc+"&navigate=yes"],
+         ["🗺️","Apple Maps","#60a5fa","https://maps.apple.com/?q="+enc+"&dirflg=d"]
+        ].map(([icon,label,color,url])=>h('a',{key:label,href:url,target:"_blank",rel:"noreferrer",onClick:()=>setShow(false),style:{background:color+"12",border:"1px solid "+color+"35",borderRadius:12,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,textDecoration:"none",marginBottom:8}},
+          h('span',{style:{fontSize:22}},icon),
+          h('span',{style:{fontWeight:700,color,fontSize:15}},label),
+          h('span',{style:{marginLeft:"auto",color:B.muted}},"↗")
+        ))
+      )
+    )
+  );
+}
+
+// CSV Importer
+function CsvImporter({onImport,onClose,existingCount}){
+  const[step,setStep]=useState("upload");
+  const[headers,setHeaders]=useState([]);
+  const[rows,setRows]=useState([]);
+  const[mapping,setMapping]=useState({});
+  const[preview,setPreview]=useState([]);
+  const[error,setError]=useState("");
+  const[dupes,setDupes]=useState([]);
+  const FIELDS=[{key:"name",label:"Client Name",required:true},{key:"dog",label:"Pet Name",required:true},{key:"breed",label:"Breed"},{key:"phone",label:"Phone"},{key:"address",label:"Address"},{key:"postcode",label:"Postcode"},{key:"notes",label:"Notes"}];
+  const parseCSV=text=>{
+    const lines=text.trim().split("\n").map(l=>l.replace(/\r$/,""));
+    if(lines.length<2)return{headers:[],rows:[]};
+    const pr=line=>{const r=[];let c="",q=false;for(const ch of line){if(ch==='"')q=!q;else if(ch===','&&!q){r.push(c.trim());c="";}else c+=ch;}r.push(c.trim());return r;};
+    return{headers:pr(lines[0]),rows:lines.slice(1).map(pr).filter(r=>r.some(c=>c))};
+  };
+  const autoMap=hdrs=>{
+    const g={};const low=hdrs.map(h2=>h2.toLowerCase().trim());
+    const try_=(fk,cands)=>{for(const c of cands){const i=low.findIndex(h2=>h2===c||h2.includes(c));if(i>=0&&!Object.values(g).includes(hdrs[i])){g[fk]=hdrs[i];return;}}};
+    try_("firstName",["first name","firstname"]);
+    try_("lastName",["last name","lastname","surname"]);
+    try_("name",["full name","contact name","name"]);
+    try_("dog",["pet's name","pet name","pets name","dog name","dog","animal name","pet"]);
+    try_("breed",["pet's breed","pets breed","breed","type"]);
+    try_("phone",["mobile","phone","cell","contact number","phone number","mobile number"]);
+    try_("email",["email","e-mail","email address"]);
+    try_("address",["mailing street","billing street","street address","street","address"]);
+    try_("suburb",["mailing city","suburb","city","billing city"]);
+    try_("postcode",["mailing zip","billing zip","postcode","postal code","zip code","zip"]);
+    try_("frequency",["frequency","grooming frequency","service frequency"]);
+    try_("service",["what serv","service","grooming service","service type"]);
+    try_("notes",["description","notes","comments","memo"]);
+    return g;
+  };
+
+  const combineName=(row,headers,mapping)=>{
+    const fi=headers.indexOf(mapping.firstName||"__");
+    const li=headers.indexOf(mapping.lastName||"__");
+    const ni=headers.indexOf(mapping.name||"__");
+    if(fi>=0||li>=0){
+      const f=(fi>=0?row[fi]||"":"").trim();
+      const l=(li>=0?row[li]||"":"").trim();
+      return [f,l].filter(Boolean).join(" ");
+    }
+    return ni>=0?(row[ni]||"").trim():"";
+  };
+
+  const combineAddress=(row,headers,mapping)=>{
+    const ai=headers.indexOf(mapping.address||"__");
+    const si=headers.indexOf(mapping.suburb||"__");
+    const a=(ai>=0?row[ai]||"":"").trim();
+    const s=(si>=0?row[si]||"":"").trim();
+    if(a&&s)return a+", "+s;
+    return a||s||"";
+  };
+  const handleFile=e=>{
+    const file=e.target.files[0];if(!file)return;
+    if(!file.name.endsWith(".csv")){setError("Please upload a .csv file");return;}
+    const reader=new FileReader();
+    reader.onload=ev=>{const{headers:h2,rows:r}=parseCSV(ev.target.result);if(!h2.length){setError("Could not read CSV");return;}setHeaders(h2);setRows(r);setMapping(autoMap(h2));setError("");setStep("map");};
+    reader.readAsText(file);
+  };
+  const buildPreview=()=>{
+    const built=rows.map((row,i)=>{
+      const get=fk=>{const col=mapping[fk];if(!col)return"";const idx=headers.indexOf(col);return idx>=0?(row[idx]||"").trim():"";};
+      const name=combineName(row,headers,mapping)||get("name")||"Unknown";
+      const address=combineAddress(row,headers,mapping)||get("address")||"";
+      // Match frequency from Zoho to our frequency list
+      const rawFreq=(get("frequency")||"").toLowerCase();
+      let freq="6 Weeks";
+      if(rawFreq.includes("week")&&!rawFreq.includes("2")&&!rawFreq.includes("fort"))freq="Weekly";
+      else if(rawFreq.includes("fort")||rawFreq.includes("2 week"))freq="Fortnightly";
+      else if(rawFreq.includes("month"))freq="Monthly";
+      else if(rawFreq.includes("6"))freq="6 Weeks";
+      else if(rawFreq.includes("8"))freq="8 Weeks";
+      else if(rawFreq.includes("10"))freq="10 Weeks";
+      else if(rawFreq.includes("12"))freq="12 Weeks";
+      else if(rawFreq.length>0)freq=rawFreq;
+      // Map service
+      const rawServ=(get("service")||"").toLowerCase();
+      let service=SERVICES[0];
+      if(rawServ.includes("full")||rawServ.includes("groom"))service="Full Groom";
+      else if(rawServ.includes("bath")||rawServ.includes("brush"))service="Bath & Brush";
+      else if(rawServ.includes("nail"))service="Nail Trim";
+      else if(rawServ.includes("puppy"))service="Puppy Groom";
+      else if(rawServ.includes("shed"))service="De-shed Treatment";
+      return{
+        id:Date.now()+i,
+        name:name||"Unknown",
+        dog:get("dog")||"Unknown",
+        breed:get("breed")||"",
+        phone:get("phone")||"",
+        email:get("email")||"",
+        address:address,
+        postcode:get("postcode")||"",
+        notes:get("notes")||"",
+        service:service,
+        frequency:freq,
+        duration:60,
+        status:"Active",
+        prefDays:[],prefTimes:[],
+        color:PALETTE[(existingCount+i)%PALETTE.length]
+      };
+    }).filter(c=>c.name!=="Unknown"||c.dog!=="Unknown");
+    setPreview(built);setStep("preview");
+  };
+  const si={upload:0,map:1,preview:2,done:3};
+  return h(Modal,{title:"Import from Zoho CSV",onClose},
+    h('div',{style:{display:"flex",alignItems:"center",marginBottom:20}},
+      ["Upload","Map","Preview"].map((s,i)=>h('div',{key:s,style:{flex:1,display:"flex",alignItems:"center"}},
+        h('div',{style:{width:26,height:26,borderRadius:"50%",flexShrink:0,background:si[step]===i?B.accent:si[step]>i?B.green:B.cardBorder,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff"}},i+1),
+        i<2&&h('div',{style:{flex:1,height:2,background:si[step]>i?B.green:B.cardBorder}})
+      ))
+    ),
+    step==="upload"&&h('div',null,
+      h('div',{style:{background:"#0d1f0d",border:"1px solid "+B.green+"30",borderRadius:12,padding:16,marginBottom:16}},
+        h('div',{style:{fontWeight:700,color:B.green,marginBottom:8}},"📥 Export from Zoho first"),
+        h('ol',{style:{color:B.muted,fontSize:13,paddingLeft:18,lineHeight:2}},
+          h('li',null,"Open Zoho CRM → Contacts"),h('li',null,"Click Actions → Export → CSV"),h('li',null,"Upload that file below")
+        )
+      ),
+      error&&h('div',{style:{color:B.red,fontSize:13,marginBottom:10}},"⚠️ "+error),
+      h('label',{style:{display:"block",background:B.input,border:"2px dashed "+B.cardBorder,borderRadius:12,padding:"32px 20px",textAlign:"center",cursor:"pointer"}},
+        h('div',{style:{fontSize:40,marginBottom:10}},"📂"),
+        h('div',{style:{fontWeight:700,color:B.text,marginBottom:4}},"Tap to choose your CSV file"),
+        h('div',{style:{fontSize:12,color:B.muted}},"Exported from Zoho CRM"),
+        h('input',{type:"file",accept:".csv",onChange:handleFile,style:{display:"none"}})
+      )
+    ),
+    step==="map"&&h('div',null,
+      h('div',{style:{fontSize:13,color:B.muted,marginBottom:14}},"Found ",h('strong',{style:{color:B.text}},rows.length+" contacts")," · ",h('strong',{style:{color:B.text}},headers.length+" columns"),". Auto-matched from Zoho headers."),
+      h('div',{style:{display:"flex",flexDirection:"column",gap:10,marginBottom:16}},
+        FIELDS.map(field=>h('div',{key:field.key,style:{display:"flex",alignItems:"center",gap:10}},
+          h('div',{style:{width:110,fontSize:12,color:field.required?B.accent:B.muted,fontWeight:600,flexShrink:0}},field.label+(field.required?" *":"")),
+          h('select',{value:mapping[field.key]||"",onChange:e=>setMapping(p=>({...p,[field.key]:e.target.value})),style:{flex:1,background:B.input,border:"1px solid "+(mapping[field.key]?B.accent+"88":B.cardBorder),borderRadius:8,padding:"7px 10px",color:B.text,fontSize:12,outline:"none"}},
+            h('option',{value:""},"— skip —"),
+            headers.map(h2=>h('option',{key:h2,value:h2},h2))
+          )
+        ))
+      ),
+      h(Btn,{onClick:buildPreview},"Preview Import →")
+    ),
+    step==="preview"&&h('div',null,
+      h('div',{style:{fontSize:13,color:B.muted,marginBottom:12}},"Importing ",h('strong',{style:{color:B.green}},preview.length+" clients"),"!"),
+      h('div',{style:{maxHeight:240,overflowY:"auto",marginBottom:16,display:"flex",flexDirection:"column",gap:8}},
+        preview.slice(0,10).map((c,i)=>h('div',{key:i,style:{background:B.input,borderRadius:8,padding:"10px 12px",display:"flex",gap:10,alignItems:"center"}},
+          h(Avatar,{name:c.name,color:c.color,size:32}),
+          h('div',null,h('div',{style:{fontWeight:700,fontSize:13,color:B.text}},c.name),h('div',{style:{fontSize:12,color:B.muted}},"🐾 "+c.dog+(c.breed?" · "+c.breed:"")+(c.postcode?" · "+c.postcode:"")))
+        )),
+        preview.length>8&&h('div',{style:{textAlign:"center",color:B.muted,fontSize:12,padding:8}},"…and "+(preview.length-8)+" more")
+      ),
+      h('div',{style:{display:"flex",gap:8}},
+        h(Btn,{onClick:()=>{
+          const dupes=[];
+          onImport(preview,(d)=>dupes.push(...d));
+          setDupes(dupes);
+          setStep("done");
+        },variant:"lime"},"✓ Import "+preview.length+" Clients"),
+        h(Btn,{onClick:()=>setStep("map"),variant:"ghost"},"← Back")
+      )
+    ),
+    step==="done"&&h('div',{style:{textAlign:"center",padding:"24px 0"}},
+      h('div',{style:{fontSize:52,marginBottom:12}},"🎉"),
+      h('div',{style:{fontWeight:800,fontSize:20,color:B.green,marginBottom:8}},preview.length+" clients imported!"),
+      h('div',{style:{color:B.muted,marginBottom:16}},"Your Zoho contacts are now in BuddyRun."),
+      h('div',{style:{background:"#0d1a0d",border:"1px solid "+B.green+"30",borderRadius:10,padding:12,marginBottom:16,fontSize:13,color:B.muted,textAlign:"left"}},
+        h('div',{style:{fontWeight:700,color:B.green,marginBottom:4}},"📍 Next: Geocode addresses"),
+        "Go to the Run tab and tap Geocode Now for accurate door-to-door routing. Free, takes a few minutes."
+      ),
+      h(Btn,{onClick:onClose},"Done")
+    )
+  );
+}
+
+// Clients Tab
+function ClientsTab({clients,setClients}){
+  const[search,setSearch]=useState("");
+  const[showAdd,setShowAdd]=useState(false);
+  const[showImport,setShowImport]=useState(false);
+  const[viewC,setViewC]=useState(null);
+  const[editC,setEditC]=useState(null);
+  const blank={name:"",dog:"",breed:"",phone:"",address:"",postcode:"",service:SERVICES[0],duration:60,notes:"",status:"Active",frequency:"6 Weeks",prefDays:[],prefTimes:[],customFrequency:"",inactiveReason:""};
+  const[form,setForm]=useState(blank);
+  const f=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const[statusFilter,setStatusFilter]=useState("Active");
+  const filtered=clients.filter(c=>{
+    const matchSearch=[c.name,c.dog,c.postcode,c.breed].some(x=>x&&x.toLowerCase().includes(search.toLowerCase()));
+    const matchStatus=statusFilter==="All"||(c.status||"Active")===statusFilter;
+    return matchSearch&&matchStatus;
+  });
+  const saveNew=()=>{if(!form.name||!form.dog)return;setClients(p=>[...p,{...form,id:Date.now(),color:PALETTE[p.length%PALETTE.length]}]);setForm(blank);setShowAdd(false);};
+  const handleImport=(nc,onDupes)=>{
+    setClients(p=>{
+      const phones=new Set(p.map(c=>c.phone).filter(Boolean));
+      const names=new Set(p.map(c=>c.name.toLowerCase().trim()));
+      const dupes=[];const fresh=[];
+      nc.forEach(c=>{
+        const pd=c.phone&&phones.has(c.phone);
+        const nd=c.name&&names.has(c.name.toLowerCase().trim());
+        if(pd||nd){dupes.push({...c,dupeReason:pd?"Same phone":"Same name"});}
+        else{fresh.push(c);if(c.phone)phones.add(c.phone);if(c.name)names.add(c.name.toLowerCase().trim());}
+      });
+      if(dupes.length&&onDupes)onDupes(dupes);
+      return[...p,...fresh];
+    });
+  };
+
+  return h('div',null,
+    h('div',{onClick:()=>setShowImport(true),style:{background:"linear-gradient(135deg,#0d1f17,#0f1320)",border:"1px solid "+B.green+"35",borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",marginBottom:14}},
+      h('span',{style:{fontSize:22}},"📥"),
+      h('div',{style:{flex:1}},h('div',{style:{fontWeight:700,color:B.green,fontSize:13}},"Import from Zoho CRM"),h('div',{style:{fontSize:11,color:B.muted}},"Upload your CSV export · loads all clients instantly")),
+      h('span',{style:{color:B.muted}},"→")
+    ),
+    showImport&&h(CsvImporter,{onImport:handleImport,onClose:()=>setShowImport(false),existingCount:clients.length}),
+    h('div',{style:{display:"flex",gap:10,marginBottom:10}},
+      h('input',{value:search,onInput:e=>setSearch(e.target.value),placeholder:"Search clients, pets, postcodes…",style:{flex:1,background:B.input,border:"1px solid "+B.cardBorder,borderRadius:10,padding:"9px 14px",color:B.text,fontSize:14,outline:"none"}}),
+      h(Btn,{onClick:()=>setShowAdd(true)},"+ Add")
+    ),
+    h('div',{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto"}},
+      ["Active","Inactive","All"].map(s=>h('button',{key:s,onClick:()=>setStatusFilter(s),style:{background:statusFilter===s?STATUS_COLORS[s]||B.accent:"transparent",color:statusFilter===s?"#0a0f1e":B.muted,border:"1px solid "+(statusFilter===s?STATUS_COLORS[s]||B.accent:B.cardBorder),borderRadius:20,padding:"4px 14px",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}},
+        s+" "+(s==="Active"?clients.filter(c=>(c.status||"Active")==="Active").length:s==="Inactive"?clients.filter(c=>c.status==="Inactive"||c.status==="Deceased").length:clients.length)
+      ))
+    ),
+    h('div',{style:{display:"flex",flexDirection:"column",gap:10}},
+      filtered.map(c=>h('div',{key:c.id,onClick:()=>setViewC(c),style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:14,padding:"14px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14}},
+        h(Avatar,{name:c.name,color:c.color}),
+        h('div',{style:{flex:1,minWidth:0}},
+          h('div',{style:{display:"flex",alignItems:"center",gap:6}},
+            h('div',{style:{fontWeight:700,color:B.text,fontSize:15}},c.name),
+            h('div',{style:{width:7,height:7,borderRadius:"50%",background:STATUS_COLORS[c.status||"Active"],flexShrink:0}})
+          ),
+          h('div',{style:{color:B.muted,fontSize:13}},"🐾 "+c.dog+" · "+c.breed),
+          h('div',{style:{color:B.muted,fontSize:12,marginTop:2}},
+            "📍 "+c.postcode+(c.frequency?" · 🔄 "+c.frequency:"")
+          )
+        ),
+        h('div',{style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}},h(Tag,{color:c.color},c.service),h('span',{style:{fontSize:11,color:B.muted}},c.duration+" min"))
+      )),
+      filtered.length===0&&h('div',{style:{textAlign:"center",color:B.muted,padding:40,fontSize:14}},"No clients yet · tap + Add to get started")
+    ),
+    viewC&&h(Modal,{title:"Client Profile",onClose:()=>setViewC(null)},
+      h('div',{style:{display:"flex",alignItems:"center",gap:16,marginBottom:20,padding:16,background:viewC.color+"10",borderRadius:12,border:"1px solid "+viewC.color+"30"}},h(Avatar,{name:viewC.name,color:viewC.color,size:52}),h('div',null,h('div',{style:{fontWeight:800,fontSize:18,color:B.text}},viewC.name),h('div',{style:{color:B.muted}},"🐾 "+viewC.dog+" — "+viewC.breed))),
+      h('div',{style:{display:"flex",gap:10,fontSize:14,marginBottom:8}},h('span',{style:{color:B.muted,minWidth:90}},"📍 Address"),h('span',null,h(AddressLink,{address:viewC.address,postcode:viewC.postcode},viewC.address+", "+viewC.postcode))),
+      [["📞 Phone",viewC.phone],["✂️ Service",viewC.service],["⏱ Duration",viewC.duration+" min"],["🔄 Frequency",viewC.frequency||(viewC.customFrequency?"Custom: "+viewC.customFrequency:"Not set")],["📅 Pref Days",(viewC.prefDays&&viewC.prefDays.length>0?viewC.prefDays.join(", "):"No preference")],["🕐 Pref Times",(viewC.prefTimes&&viewC.prefTimes.length>0?viewC.prefTimes.join(", "):"No preference")],["📊 Status",viewC.status||"Active"],["📝 Notes",viewC.notes||"None"]].map(([k,v])=>h('div',{key:k,style:{display:"flex",gap:10,fontSize:14,marginBottom:8}},h('span',{style:{color:B.muted,minWidth:90}},k),h('span',{style:{color:B.text}},v))),
+      h('div',{style:{display:"flex",gap:8,marginTop:16,flexWrap:"wrap"}},
+        h(Btn,{small:true,onClick:()=>{setEditC({...viewC});setViewC(null);}},"Edit"),
+        h(Btn,{small:true,variant:"ghost",onClick:()=>{const msg="Hi "+viewC.name.split(" ")[0]+"! Reminder: "+viewC.dog+"'s appointment is coming up. Reply YES to confirm. — The Perfect Buddy 🐾";navigator.clipboard&&navigator.clipboard.writeText(msg);alert("SMS copied!\n\n"+msg);}},"📱 SMS"),
+        h(Btn,{small:true,variant:"secondary",onClick:()=>{const v=prompt("Update phone:",viewC.phone||"");if(v!==null){setClients(p=>p.map(c=>c.id===viewC.id?{...c,phone:v}:c));setViewC(p=>({...p,phone:v}));}}},"📞 Phone"),
+        h(Btn,{small:true,variant:"secondary",onClick:()=>{const v=prompt("Update address:",viewC.address||"");if(v!==null){setClients(p=>p.map(c=>c.id===viewC.id?{...c,address:v}:c));setViewC(p=>({...p,address:v}));}}},"📍 Address"),
+        h(Btn,{small:true,variant:"danger",onClick:()=>{setClients(p=>p.filter(c=>c.id!==viewC.id));setViewC(null);}},"Delete")
+      )
+    ),
+    editC&&h(Modal,{title:"Edit Client",onClose:()=>setEditC(null)},
+      h('div',{style:{display:"flex",flexDirection:"column",gap:12}},
+        h(Inp,{label:"Client Name",value:editC.name,onChange:v=>setEditC(p=>({...p,name:v}))}),h(Inp,{label:"Pet's Name",value:editC.dog,onChange:v=>setEditC(p=>({...p,dog:v}))}),h(Inp,{label:"Breed",value:editC.breed,onChange:v=>setEditC(p=>({...p,breed:v}))}),h(Inp,{label:"Phone",value:editC.phone,onChange:v=>setEditC(p=>({...p,phone:v}))}),h(Inp,{label:"Address",value:editC.address,onChange:v=>setEditC(p=>({...p,address:v}))}),h(Inp,{label:"Postcode",value:editC.postcode,onChange:v=>setEditC(p=>({...p,postcode:v}))}),
+        h(Sel,{label:"Service",value:editC.service,onChange:v=>setEditC(p=>({...p,service:v})),options:SERVICES}),h(Sel,{label:"Duration",value:editC.duration,onChange:v=>setEditC(p=>({...p,duration:Number(v)})),options:DURATIONS.map(d=>({value:d,label:d+" min"}))}),
+        h('div',{style:{display:"flex",flexDirection:"column",gap:4}},h('label',{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}},"Notes"),h('textarea',{value:editC.notes,onInput:e=>setEditC(p=>({...p,notes:e.target.value})),rows:3,style:{background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:14,outline:"none",resize:"vertical",width:"100%"}})),
+        h(Btn,{onClick:()=>{setClients(p=>p.map(c=>c.id===editC.id?{...editC}:c));setEditC(null);},full:true},"Save Changes")
+      )
+    ),
+    showAdd&&h(Modal,{title:"New Client",onClose:()=>setShowAdd(false)},
+      h('div',{style:{display:"flex",flexDirection:"column",gap:12}},
+        h(Inp,{label:"Client Name",value:form.name,onChange:v=>f("name",v),placeholder:"Jane Smith"}),h(Inp,{label:"Pet's Name",value:form.dog,onChange:v=>f("dog",v),placeholder:"Buddy"}),h(Inp,{label:"Breed",value:form.breed,onChange:v=>f("breed",v),placeholder:"Labrador"}),h(Inp,{label:"Phone",value:form.phone,onChange:v=>f("phone",v),placeholder:"0400 000 000"}),h(Inp,{label:"Address",value:form.address,onChange:v=>f("address",v),placeholder:"12 High St"}),h(Inp,{label:"Postcode",value:form.postcode,onChange:v=>f("postcode",v),placeholder:"2508"}),
+        h(Sel,{label:"Service",value:form.service,onChange:v=>f("service",v),options:SERVICES}),h(Sel,{label:"Duration",value:form.duration,onChange:v=>f("duration",Number(v)),options:DURATIONS.map(d=>({value:d,label:d+" min"}))}),
+        h('div',{style:{display:"flex",flexDirection:"column",gap:4}},h('label',{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}},"Notes"),h('textarea',{value:form.notes,onInput:e=>f("notes",e.target.value),rows:3,style:{background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:14,outline:"none",resize:"vertical",width:"100%"}})),
+        h("div",{style:{height:1,background:B.cardBorder}}),
+        h(Sel,{label:"Status",value:form.status||"Active",onChange:v=>f("status",v),options:CLIENT_STATUSES}),
+        h(Sel,{label:"Service Frequency",value:form.frequency||"6 Weeks",onChange:v=>f("frequency",v),options:FREQUENCIES}),
+        form.frequency==="Custom"&&h(Inp,{label:"Custom Frequency",value:form.customFrequency||"",onChange:v=>f("customFrequency",v),placeholder:"e.g. Every 3 weeks"}),
+        h("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+          h("label",{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}},"Preferred Days"),
+          h("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},
+            PREF_DAYS.map(d=>h("div",{key:d,onClick:()=>{const curr=form.prefDays||[];f("prefDays",curr.includes(d)?curr.filter(x=>x!==d):[...curr,d]);},style:{background:(form.prefDays||[]).includes(d)?B.accent+"20":"transparent",border:"1px solid "+((form.prefDays||[]).includes(d)?B.accent:B.cardBorder),borderRadius:20,padding:"4px 12px",fontSize:12,color:(form.prefDays||[]).includes(d)?B.accent:B.muted,cursor:"pointer",fontWeight:(form.prefDays||[]).includes(d)?700:400}},d))
+          )
+        ),
+        h("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+          h("label",{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}},"Preferred Times"),
+          h("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},
+            PREF_TIMES.map(t=>h("div",{key:t,onClick:()=>{const curr=form.prefTimes||[];f("prefTimes",curr.includes(t)?curr.filter(x=>x!==t):[...curr,t]);},style:{background:(form.prefTimes||[]).includes(t)?B.accent+"20":"transparent",border:"1px solid "+((form.prefTimes||[]).includes(t)?B.accent:B.cardBorder),borderRadius:20,padding:"4px 12px",fontSize:12,color:(form.prefTimes||[]).includes(t)?B.accent:B.muted,cursor:"pointer",fontWeight:(form.prefTimes||[]).includes(t)?700:400}},t))
+          )
+        ),
+        (form.status==="Inactive"||form.status==="Deceased")&&h(Inp,{label:"Reason",value:form.inactiveReason||"",onChange:v=>f("inactiveReason",v),placeholder:"Moved away, dog passed, paused..."}),
+        h(Btn,{onClick:saveNew,full:true},"Add Client")
+      )
+    )
+  );
+}
+
+// Map Navigator
+function MapNavigator({slots,clients}){
+  const[open,setOpen]=useState(false);
+  const getC=id=>clients.find(c=>c.id===Number(id));
+  const ordered=[...slots].sort((a,b)=>a.startHour-b.startHour).map(s=>getC(s.clientId)).filter(Boolean);
+  const enc=c=>encodeURIComponent(c.address+" "+c.postcode);
+  if(!slots.length)return null;
+  return h('div',{style:{marginBottom:16}},
+    h('button',{onClick:()=>setOpen(p=>!p),style:{width:"100%",background:"linear-gradient(135deg,#0d1a0d,#111827)",border:"1px solid "+B.lime+"40",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",gap:12}},
+      h('div',{style:{width:36,height:36,background:B.limeSoft,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}},"🗺️"),
+      h('div',{style:{flex:1,textAlign:"left"}},h('div',{style:{fontWeight:700,color:B.lime,fontSize:14}},"Navigate Today's Run"),h('div',{style:{fontSize:12,color:B.muted}},slots.length+" stops · Open in your map app")),
+      h('span',{style:{color:B.muted}},open?"▲":"▼")
+    ),
+    open&&h('div',{style:{background:B.card,border:"1px solid "+B.lime+"30",borderTop:"none",borderRadius:"0 0 14px 14px",padding:16}},
+      h('div',{style:{marginBottom:14}},ordered.map((c,i)=>h('div',{key:c.id,style:{display:"flex",alignItems:"center",gap:10,marginBottom:6}},
+        h('div',{style:{width:22,height:22,borderRadius:"50%",background:c.color+"20",border:"1.5px solid "+c.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:c.color,flexShrink:0}},i+1),
+        h('span',{style:{fontSize:13,color:B.text}},c.dog+" · ",h(AddressLink,{address:c.address,postcode:c.postcode},c.address+", "+c.postcode))
+      ))),
+      [["🟦","Google Maps","#4285f4",()=>{if(!ordered.length)return;ordered.length===1?window.open("https://www.google.com/maps/dir/?api=1&destination="+enc(ordered[0]),"_blank"):window.open("https://www.google.com/maps/dir/?api=1&destination="+enc(ordered[ordered.length-1])+"&waypoints="+ordered.slice(0,-1).map(enc).join("|")+"&travelmode=driving","_blank");}],
+       ["🔷","Waze","#33ccff",()=>ordered.length&&window.open("https://waze.com/ul?q="+enc(ordered[0])+"&navigate=yes","_blank")],
+       ["🗺️","Apple Maps","#60a5fa",()=>ordered.length&&window.open("https://maps.apple.com/?daddr="+enc(ordered[0])+"&dirflg=d","_blank")]
+      ].map(([icon,label,color,action])=>h('button',{key:label,onClick:action,style:{background:color+"10",border:"1px solid "+color+"35",borderRadius:10,padding:"11px 14px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",width:"100%",marginBottom:6}},
+        h('span',{style:{fontSize:20}},icon),h('div',{style:{textAlign:"left",flex:1}},h('div',{style:{fontWeight:700,color,fontSize:14}},label)),h('span',{style:{color:B.muted}},"↗")
+      ))
+    )
+  );
+}
+
+// Calendar Tab
+function CalendarTab({clients,schedule,setSchedule}){
+  const[view,setView]=useState("month");
+  const[cur,setCur]=useState(new Date(today));
+  const[showAdd,setShowAdd]=useState(false);
+  const[addDate,setAddDate]=useState(fmt(today));
+  const[addForm,setAddForm]=useState({clientId:"",startHour:9});
+  const[selSlot,setSelSlot]=useState(null);
+  const getC=id=>clients.find(c=>c.id===Number(id));
+  const yr=cur.getFullYear(),mo=cur.getMonth();
+  const cells=[];for(let i=0;i<new Date(yr,mo,1).getDay();i++)cells.push(null);for(let d=1;d<=new Date(yr,mo+1,0).getDate();d++)cells.push(new Date(yr,mo,d));
+  const wkS=(()=>{const d=new Date(cur);d.setDate(d.getDate()-d.getDay());return d;})();
+  const wkDays=Array.from({length:7},(_,i)=>addDays(wkS,i));
+  const slotsFor=date=>schedule.filter(s=>s.date===fmt(date)).sort((a,b)=>a.startHour-b.startHour);
+  const todayStr=fmt(new Date());
+  const nav=dir=>{const d=new Date(cur);view==="month"?d.setMonth(d.getMonth()+dir):view==="week"?d.setDate(d.getDate()+dir*7):d.setDate(d.getDate()+dir);setCur(d);};
+  const gcalUrl=slot=>{const c=getC(slot.clientId);if(!c)return"#";const d=slot.date.replace(/-/g,"");const sh=String(slot.startHour).padStart(2,"0");const eh=slot.startHour+Math.floor(c.duration/60);const em=c.duration%60;return"https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(c.service+" — "+c.dog)+"&dates="+d+"T"+sh+"0000/"+d+"T"+String(eh).padStart(2,"0")+String(em).padStart(2,"0")+"00&location="+encodeURIComponent(c.address+", "+c.postcode);};
+  const Pill=({slot,compact})=>{const c=getC(slot.clientId);if(!c)return null;return h('div',{onClick:e=>{e.stopPropagation();setSelSlot(slot);},style:{background:c.color+"20",border:"1px solid "+c.color+"50",borderLeft:"3px solid "+c.color,borderRadius:6,padding:compact?"2px 5px":"5px 8px",fontSize:compact?10:12,color:c.color,cursor:"pointer",marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}},compact?c.dog:String(slot.startHour).padStart(2,"0")+":00 · "+c.dog);};
+
+  return h('div',null,
+    h('div',{style:{display:"flex",alignItems:"center",gap:8,marginBottom:16}},
+      h('button',{onClick:()=>nav(-1),style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:8,width:32,height:32,color:B.text,fontSize:16}},"‹"),
+      h('div',{style:{flex:1,textAlign:"center",fontWeight:800,fontSize:15,color:B.text}},view==="month"?MONTHS[mo]+" "+yr:view==="week"?MONTHS[wkS.getMonth()].slice(0,3)+" "+wkS.getDate()+" – "+wkDays[6].getDate():DAYS_SHORT[cur.getDay()]+" "+cur.getDate()+" "+MONTHS[cur.getMonth()].slice(0,3)),
+      h('button',{onClick:()=>nav(1),style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:8,width:32,height:32,color:B.text,fontSize:16}},"›"),
+      h('button',{onClick:()=>setCur(new Date()),style:{background:B.accentSoft,border:"1px solid "+B.accent+"50",borderRadius:8,padding:"6px 10px",color:B.accent,fontSize:12,fontWeight:700}},"Today")
+    ),
+    h('div',{style:{display:"flex",background:B.card,borderRadius:10,border:"1px solid "+B.cardBorder,padding:3,gap:2,marginBottom:16}},["month","week","day"].map(v=>h('button',{key:v,onClick:()=>setView(v),style:{flex:1,background:view===v?B.accent:"transparent",color:view===v?"#fff":B.muted,border:"none",borderRadius:8,padding:"7px",fontSize:13,fontWeight:700,textTransform:"capitalize"}},v))),
+    view==="month"&&h('div',null,
+      h('div',{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1,marginBottom:4}},DAYS_SHORT.map(d=>h('div',{key:d,style:{textAlign:"center",fontSize:11,fontWeight:700,color:B.muted,padding:"4px 0"}},d))),
+      h('div',{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}},cells.map((d,i)=>{if(!d)return h('div',{key:i});const ds=slotsFor(d);const isT=fmt(d)===todayStr;return h('div',{key:i,onClick:()=>{setCur(new Date(d));setView("day");},style:{background:isT?B.accent+"15":B.card,border:"1px solid "+(isT?B.accent+"60":B.cardBorder),borderRadius:8,padding:"6px 5px",minHeight:60,cursor:"pointer"}},h('div',{style:{fontSize:12,fontWeight:700,color:isT?B.accent:B.text,marginBottom:3}},d.getDate()),ds.slice(0,2).map(s=>h(Pill,{key:s.id,slot:s,compact:true})),ds.length>2&&h('div',{style:{fontSize:9,color:B.muted,fontWeight:700}},"+"+( ds.length-2)));}))),
+    view==="week"&&h('div',{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}},wkDays.map(d=>{const ds=slotsFor(d);const isT=fmt(d)===todayStr;return h('div',{key:fmt(d),onClick:()=>{setCur(new Date(d));setView("day");},style:{cursor:"pointer"}},h('div',{style:{textAlign:"center",marginBottom:6}},h('div',{style:{fontSize:10,color:isT?B.accent:B.muted,fontWeight:700}},DAYS_SHORT[d.getDay()]),h('div',{style:{width:26,height:26,borderRadius:"50%",background:isT?B.accent:"transparent",color:isT?"#fff":B.text,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",margin:"2px auto"}},d.getDate())),ds.map(s=>h(Pill,{key:s.id,slot:s,compact:true})),ds.length===0&&h('div',{style:{height:28,borderRadius:6,border:"1px dashed "+B.cardBorder}}));})),
+    view==="day"&&h('div',null,
+      h(MapNavigator,{slots:slotsFor(cur),clients}),
+      HOURS.map(hr=>{const slot=schedule.find(s=>s.date===fmt(cur)&&s.startHour===hr);const c=slot?getC(slot.clientId):null;return h('div',{key:hr,style:{display:"flex",gap:10,alignItems:"stretch",minHeight:44}},h('div',{style:{width:44,flexShrink:0,display:"flex",alignItems:"flex-start",paddingTop:10}},h('span',{style:{fontSize:11,color:B.muted,fontFamily:"monospace"}},String(hr).padStart(2,"0")+":00")),h('div',{style:{flex:1,borderTop:"1px solid "+B.cardBorder+"30"}},c&&slot?h('div',{onClick:()=>setSelSlot(slot),style:{background:c.color+"18",border:"1px solid "+c.color+"40",borderLeft:"3px solid "+c.color,borderRadius:8,padding:"8px 12px",cursor:"pointer",margin:"2px 0"}},h('div',{style:{fontWeight:700,fontSize:13,color:c.color}},c.dog+" · "+c.name),h('div',{style:{fontSize:11,color:B.muted}},c.service+" · "+c.duration+" min")):h('div',{onClick:()=>{setAddDate(fmt(cur));setAddForm({clientId:clients[0]&&clients[0].id||"",startHour:hr});setShowAdd(true);},style:{height:38,borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",paddingLeft:8}},h('span',{style:{fontSize:11,color:B.cardBorder}},"+ Add"))));})
+    ),
+    h('div',{style:{marginTop:16}},h(Btn,{onClick:()=>{setAddDate(fmt(cur));setAddForm({clientId:clients[0]&&clients[0].id||"",startHour:9});setShowAdd(true);},variant:"secondary"},"+ Book Appointment")),
+    showAdd&&h(Modal,{title:"Book Appointment",onClose:()=>setShowAdd(false)},h('div',{style:{display:"flex",flexDirection:"column",gap:14}},h(Sel,{label:"Client",value:addForm.clientId,onChange:v=>setAddForm(p=>({...p,clientId:v})),options:clients.map(c=>({value:c.id,label:c.dog+" ("+c.name+")"}))}),h(Inp,{label:"Date",type:"date",value:addDate,onChange:setAddDate}),h(Sel,{label:"Start Time",value:addForm.startHour,onChange:v=>setAddForm(p=>({...p,startHour:v})),options:HOURS.map(hr=>({value:hr,label:String(hr).padStart(2,"0")+":00"}))}),h(Btn,{onClick:()=>{if(!addForm.clientId)return;setSchedule(p=>[...p,{id:Date.now(),clientId:Number(addForm.clientId),date:addDate,startHour:Number(addForm.startHour)}]);setShowAdd(false);},full:true},"Confirm Booking"))),
+    selSlot&&(()=>{const c=getC(selSlot.clientId);if(!c)return null;const eh=selSlot.startHour+Math.floor(c.duration/60),em=c.duration%60;return h(Modal,{title:"Appointment",onClose:()=>setSelSlot(null)},h('div',{style:{display:"flex",alignItems:"center",gap:14,marginBottom:18,padding:14,background:c.color+"10",borderRadius:12,border:"1px solid "+c.color+"30"}},h(Avatar,{name:c.name,color:c.color,size:48}),h('div',null,h('div',{style:{fontWeight:800,fontSize:17,color:B.text}},c.dog),h('div',{style:{color:B.muted}},c.name+" · "+c.phone))),[["📅 Date",selSlot.date],["⏰ Time",String(selSlot.startHour).padStart(2,"0")+":00 – "+String(eh).padStart(2,"0")+":"+String(em).padStart(2,"0")],["✂️ Service",c.service]].map(([k,v])=>h('div',{key:k,style:{display:"flex",gap:10,fontSize:14,marginBottom:8}},h('span',{style:{color:B.muted,minWidth:90}},k),h('span',{style:{color:B.text}},v))),h('div',{style:{display:"flex",gap:10,fontSize:14,marginBottom:8}},h('span',{style:{color:B.muted,minWidth:90}},"📍 Address"),h('span',null,h(AddressLink,{address:c.address,postcode:c.postcode},c.address+", "+c.postcode))),h('div',{style:{display:"flex",gap:8,marginTop:16,flexWrap:"wrap"}},h(Btn,{small:true,onClick:()=>window.open(gcalUrl(selSlot),"_blank"),variant:"secondary"},"📅 Google Cal"),h(Btn,{small:true,onClick:()=>{const msg="Hi "+c.name.split(" ")[0]+"! Reminder: "+c.dog+"'s "+c.service+" is tomorrow at "+selSlot.startHour+":00. Reply YES 🐾";navigator.clipboard&&navigator.clipboard.writeText(msg);alert("SMS copied!");},variant:"ghost"},"📱 SMS"),h(Btn,{small:true,variant:"danger",onClick:()=>{setSchedule(p=>p.filter(s=>s.id!==selSlot.id));setSelSlot(null);}},"Remove")));})()
+  );
+}
+
+// Reminders Tab
+function RemindersTab({clients}){
+  const[sel,setSel]=useState([]);
+  const[msg,setMsg]=useState("Hi {name}! Reminder: {dog}'s grooming appointment is coming up. Reply YES to confirm. — The Perfect Buddy 🐾");
+  const[sent,setSent]=useState([]);
+  const[prev,setPrev]=useState(null);
+  const toggle=id=>setSel(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  const build=c=>msg.replace("{name}",c.name.split(" ")[0]).replace("{dog}",c.dog);
+  const sendAll=()=>{const text=sel.map(id=>{const c=clients.find(x=>x.id===id);return"To: "+c.phone+" ("+c.dog+")\n"+build(c);}).join("\n\n");navigator.clipboard&&navigator.clipboard.writeText(text);setSent(p=>[...p,...sel]);setSel([]);alert("✅ "+sel.length+" reminder(s) copied!\nPaste into your SMS app.");};
+  return h('div',null,
+    h('div',{style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:14,padding:16,marginBottom:16}},
+      h('div',{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}},"Message Template"),
+      h('textarea',{value:msg,onInput:e=>setMsg(e.target.value),rows:4,style:{width:"100%",background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"10px 12px",color:B.text,fontSize:13,outline:"none",resize:"vertical",boxSizing:"border-box"}}),
+      h('div',{style:{fontSize:11,color:B.muted,marginTop:6}},"Use {name} and {dog} as placeholders")
+    ),
+    h('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+      h('span',{style:{fontSize:13,color:B.muted}},sel.length+" selected"),
+      h('div',{style:{display:"flex",gap:8}},h(Btn,{small:true,variant:"ghost",onClick:()=>setSel(clients.map(c=>c.id))},"Select All"),sel.length>0&&h(Btn,{small:true,variant:"teal",onClick:sendAll},"📱 Copy SMS ("+sel.length+")"))
+    ),
+    clients.map(c=>h('div',{key:c.id,onClick:()=>toggle(c.id),style:{background:B.card,border:"1px solid "+(sel.includes(c.id)?c.color:B.cardBorder),borderRadius:12,padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,marginBottom:8,opacity:sent.includes(c.id)?0.5:1}},
+      h('div',{style:{width:20,height:20,borderRadius:4,border:"2px solid "+(sel.includes(c.id)?c.color:B.muted),background:sel.includes(c.id)?c.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},sel.includes(c.id)&&h('span',{style:{color:"#0a0f1e",fontSize:12,fontWeight:800}},"✓")),
+      h(Avatar,{name:c.name,color:c.color,size:34}),
+      h('div',{style:{flex:1}},h('div',{style:{fontWeight:700,color:B.text,fontSize:14}},c.name+" · "+c.dog),h('div',{style:{color:B.muted,fontSize:12}},"📱 "+c.phone)),
+      h('button',{onClick:e=>{e.stopPropagation();setPrev(c);},style:{background:"none",border:"none",color:B.muted,fontSize:11}},"Preview")
+    )),
+    prev&&h(Modal,{title:"SMS Preview",onClose:()=>setPrev(null)},h('div',{style:{background:"#1e2030",borderRadius:12,padding:16,marginBottom:16}},h('div',{style:{fontSize:12,color:B.muted,marginBottom:8}},"To: "+prev.phone),h('div',{style:{background:B.teal,color:"#0a0f1e",borderRadius:"16px 16px 4px 16px",padding:"12px 16px",fontSize:14,lineHeight:1.5,display:"inline-block",maxWidth:"85%"}},build(prev))),h(Btn,{onClick:()=>{navigator.clipboard&&navigator.clipboard.writeText(build(prev));setPrev(null);alert("Copied!");},variant:"teal"},"Copy Message"))
+  );
+}
+
+// Run Optimiser
+const ZONES=[{id:"shire",name:"Cronulla/Shire",color:"#6366f1",pc:["2230","2231","2232","2233","2234","2227","2228","2229"]},{id:"menai",name:"Illawong/Menai",color:"#84cc16",pc:["2234","2233","2232","2230"]},{id:"woonona",name:"Woonona/Coast",color:"#2dd4bf",pc:["2517","2518","2519","2516","2515","2514"]},{id:"local",name:"Helensburgh/Local",color:"#f59e0b",pc:["2508","2527","2526"]},{id:"other",name:"Other",color:"#6b7280",pc:[]}];
+const ZC={shire:{lat:-34.0523,lng:151.1537},menai:{lat:-34.0100,lng:151.0230},woonona:{lat:-34.3500,lng:150.9100},local:{lat:-34.1771,lng:150.9947},other:{lat:-34.05,lng:151.10}};
+const HOME_ADDR="Helensburgh NSW 2508";const HOME_LAT=-34.1771;const HOME_LNG=150.9947;
+
+// ── OpenStreetMap Geocoding (free, no API key needed)
+async function geocodeAddress(address, postcode, suburb="") {
+  const query = [address, suburb, postcode, "NSW", "Australia"].filter(Boolean).join(", ");
+  try {
+    const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=au&q=" + encodeURIComponent(query);
+    const res = await fetch(url, { headers: { "Accept-Language": "en", "User-Agent": "BuddyRun/1.0" } });
+    const data = await res.json();
+    if (data && data[0]) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), geocoded: true };
+    }
+  } catch(e) { console.warn("Geocode failed for", query, e); }
+  // Fallback to zone centre if geocoding fails
+  const zone = gZone(postcode);
+  return { ...ZC[zone.id]||ZC.other, geocoded: false };
+}
+
+// Geocode all clients that don't have real coordinates
+async function geocodeClients(clients, onProgress) {
+  const results = [];
+  let done = 0;
+  for (const c of clients) {
+    if (c.geocoded && c.lat && c.lng) {
+      results.push(c);
+      done++;
+      onProgress && onProgress(done, clients.length);
+      continue;
+    }
+    const coords = await geocodeAddress(c.address, c.postcode);
+    results.push({ ...c, ...coords });
+    done++;
+    onProgress && onProgress(done, clients.length);
+    // Nominatim rate limit — max 1 request per second
+    await new Promise(r => setTimeout(r, 1100));
+  }
+  return results;
+}
+const gZone=pc=>{if(!pc)return ZONES[4];const p=pc.replace(/\s/g,"");return ZONES.find(z=>z.pc.includes(p))||ZONES[4];};
+const dKm=(la1,ln1,la2,ln2)=>{const R=6371,dL=(la2-la1)*Math.PI/180,dN=(ln2-ln1)*Math.PI/180,a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dN/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));};
+const tMins=(la1,ln1,la2,ln2)=>Math.round(dKm(la1,ln1,la2,ln2)/40*60)+5;
+const optStops=stops=>{if(stops.length<=1)return stops;const uv=[...stops];const r=[];let c={lat:HOME_LAT,lng:HOME_LNG};while(uv.length){let b=0,bd=Infinity;uv.forEach((s,i)=>{const d=dKm(c.lat,c.lng,s.lat||HOME_LAT,s.lng||HOME_LNG);if(d<bd){bd=d;b=i;}});c=uv[b];r.push(uv.splice(b,1)[0]);}return r;};
+
+function RunOptimiserTab({clients,setClients,schedule,setSchedule}){
+  const[sett,setSett]=usePersisted("run_sett",{startTime:8,endTime:17,maxJobs:7,bufferMins:15});
+  const[optDate,setOptDate]=useState(fmt(today));
+  const[selC,setSelC]=useState([]);
+  const[result,setResult]=useState(null);
+  const[showSett,setShowSett]=useState(false);
+  const[gcalOn,setGcalOn]=useState(false);
+  const[geocoding,setGeocoding]=useState(false);
+  const[geocodeProgress,setGeocodeProgress]=useState({done:0,total:0});
+  const geocodedCount=clients.filter(c=>c.geocoded).length;
+  const needsGeocode=clients.filter(c=>!c.geocoded).length;
+  const gcalEvts=[{id:"g1",title:"Max - Full Groom",date:fmt(today),time:"9:00 AM"},{id:"g2",title:"Bella - Bath & Brush",date:fmt(addDays(today,1)),time:"11:00 AM"},{id:"g3",title:"Luna - De-shed",date:fmt(addDays(today,3)),time:"2:00 PM"}];
+  const toggleC=id=>setSelC(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  const fmtT=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+  const getCoords=c=>{const z=gZone(c.postcode);return c.lat&&c.lng?{lat:c.lat,lng:c.lng}:ZC[z.id]||ZC.other;};
+
+  const runOpt=()=>{
+    if(!selC.length){alert("Select at least one client.");return;}
+    const stops=selC.map(id=>{const c=clients.find(x=>x.id===id);const coords=getCoords(c);return{...c,...coords,zone:gZone(c.postcode)};});
+    const zg={};stops.forEach(s=>{if(!zg[s.zone.id])zg[s.zone.id]=[];zg[s.zone.id].push(s);});
+    const ordered=[];Object.values(zg).forEach(g=>optStops(g).forEach(s=>ordered.push(s)));
+    let ct=sett.startTime*60,pLat=HOME_LAT,pLng=HOME_LNG;
+    const slots=ordered.map((s,i)=>{const tr=i===0?tMins(HOME_LAT,HOME_LNG,s.lat,s.lng):tMins(pLat,pLng,s.lat,s.lng);if(i>0)ct+=tr;const sh=Math.floor(ct/60),sm=ct%60,et=ct+s.duration;pLat=s.lat;pLng=s.lng;ct=et+sett.bufferMins;return{client:s,startHour:sh,startMin:sm,endTime:et,travel:tr,zone:s.zone};});
+    const last=slots[slots.length-1];
+    setResult({slots,totalDrive:slots.reduce((a,s)=>a+s.travel,0),finishH:Math.floor(last.endTime/60),finishM:last.endTime%60,overTime:Math.floor(last.endTime/60)>=sett.endTime});
+  };
+
+  const saveRun=()=>{if(!result)return;setSchedule(p=>[...p.filter(s=>s.date!==optDate),...result.slots.map(s=>({id:Date.now()+s.client.id,clientId:s.client.id,date:optDate,startHour:s.startHour}))]);alert("✅ Run saved to calendar for "+optDate);setResult(null);};
+  const openMaps=()=>{if(!result)return;const st=result.slots.map(s=>encodeURIComponent(s.client.address+" "+s.client.postcode));window.open("https://www.google.com/maps/dir/?api=1&origin="+encodeURIComponent(HOME_ADDR)+"&destination="+st[st.length-1]+"&waypoints="+st.slice(0,-1).join("|")+"&travelmode=driving","_blank");};
+
+  return h('div',null,
+    // Google Calendar panel
+    h('div',{style:{background:gcalOn?"linear-gradient(135deg,#0d2010,#111827)":B.card,border:"1px solid "+(gcalOn?B.green+"50":B.cardBorder),borderRadius:16,padding:16,marginBottom:16}},
+      h('div',{style:{display:"flex",alignItems:"center",gap:12,marginBottom:gcalOn?12:0}},
+        h('div',{style:{width:36,height:36,background:gcalOn?B.green+"20":B.cardBorder+"50",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}},"📅"),
+        h('div',{style:{flex:1}},h('div',{style:{fontWeight:800,fontSize:14,color:gcalOn?B.green:B.text}},"Google Calendar"),h('div',{style:{fontSize:12,color:B.muted}},gcalOn?"Connected · Read-only · Cannot edit your calendar":"Connect to import your existing appointments")),
+        gcalOn?h('div',{style:{background:B.green+"20",border:"1px solid "+B.green+"40",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,color:B.green}},"✓ Live"):h(Btn,{small:true,onClick:()=>{setGcalOn(true);alert("In production this opens Google OAuth login.\n\nDemo events loaded. BuddyRun is READ-ONLY — it will never edit your Google Calendar.");}},  "Connect")
+      ),
+      gcalOn&&h('div',null,
+        h('div',{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}},"🔒 Read-only · "+gcalEvts.length+" appointments imported"),
+        gcalEvts.map(e=>h('div',{key:e.id,style:{background:B.input,borderRadius:8,padding:"8px 12px",display:"flex",gap:10,alignItems:"center",marginBottom:6}},h('div',{style:{width:8,height:8,borderRadius:"50%",background:B.green,flexShrink:0}}),h('div',{style:{flex:1}},h('div',{style:{fontSize:13,fontWeight:600,color:B.text}},e.title),h('div',{style:{fontSize:11,color:B.muted}},e.date+" · "+e.time)),h('div',{style:{fontSize:10,color:B.green,fontWeight:600}},"GCal"))),
+        h(Btn,{small:true,variant:"ghost",onClick:()=>setGcalOn(false)},"Disconnect")
+      )
+    ),
+
+    // Optimiser
+    h('div',{style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:16,padding:16,marginBottom:16}},
+      h('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
+        h('div',null,h('div',{style:{fontWeight:800,fontSize:16,color:B.text}},"🗺️ Run Optimiser"),h('div',{style:{fontSize:12,color:B.muted}},"Helensburgh → best route · travel + 5 min setup")),
+        h('button',{onClick:()=>setShowSett(p=>!p),style:{background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"6px 10px",fontSize:12,color:B.muted}},"⚙️ Settings")
+      ),
+      showSett&&h('div',{style:{background:B.input,borderRadius:12,padding:14,marginBottom:14}},
+        h('div',{style:{fontWeight:700,color:B.text,fontSize:13,marginBottom:10}},"⚙️ Run Settings"),
+        h('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+          h(Sel,{label:"Start",value:sett.startTime,onChange:v=>setSett(p=>({...p,startTime:Number(v)})),options:[6,7,8,9,10].map(n=>({value:n,label:String(n).padStart(2,"0")+":00"}))}),
+          h(Sel,{label:"End",value:sett.endTime,onChange:v=>setSett(p=>({...p,endTime:Number(v)})),options:[15,16,17,18,19].map(n=>({value:n,label:String(n).padStart(2,"0")+":00"}))}),
+          h(Sel,{label:"Max jobs",value:sett.maxJobs,onChange:v=>setSett(p=>({...p,maxJobs:Number(v)})),options:[4,5,6,7,8,9,10].map(n=>({value:n,label:n+" jobs"}))}),
+          h(Sel,{label:"Buffer",value:sett.bufferMins,onChange:v=>setSett(p=>({...p,bufferMins:Number(v)})),options:[5,10,15,20,30].map(n=>({value:n,label:n+" min"}))}),
+        )
+      ),
+      h('div',{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}},ZONES.slice(0,4).map(z=>h('div',{key:z.id,style:{display:"flex",alignItems:"center",gap:4,background:z.color+"15",border:"1px solid "+z.color+"40",borderRadius:20,padding:"3px 10px"}},h('div',{style:{width:6,height:6,borderRadius:"50%",background:z.color}}),h('span',{style:{fontSize:11,color:z.color,fontWeight:600}},z.name)))),
+
+      // Geocode status bar
+      geocoding
+        ? h('div',{style:{background:"#0d1a2d",border:"1px solid "+B.accent+"40",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}},
+            h('div',{style:{fontSize:20}},"⏳"),
+            h('div',{style:{flex:1}},
+              h('div',{style:{fontWeight:700,color:B.accent,fontSize:13}},"Geocoding addresses..."),
+              h('div',{style:{fontSize:11,color:B.muted}},geocodeProgress.done+" of "+geocodeProgress.total+" clients · ~1 per second"),
+              h('div',{style:{marginTop:6,height:4,borderRadius:2,background:B.cardBorder}},
+                h('div',{style:{height:4,borderRadius:2,background:B.accent,width:(geocodeProgress.total>0?Math.round(geocodeProgress.done/geocodeProgress.total*100):0)+"%",transition:"width 0.3s"}})
+              )
+            )
+          )
+        : needsGeocode > 0
+          ? h('div',{style:{background:"#1a0d0d",border:"1px solid "+B.yellow+"40",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}},
+              h('div',{style:{fontSize:18}},"📍"),
+              h('div',{style:{flex:1}},
+                h('div',{style:{fontWeight:700,color:B.yellow,fontSize:13}},needsGeocode+" clients need street-level coordinates"),
+                h('div',{style:{fontSize:11,color:B.muted}},"Geocode now for accurate door-to-door routing · free via OpenStreetMap")
+              ),
+              h('button',{onClick:async()=>{
+                setGeocoding(true);
+                setGeocodeProgress({done:0,total:clients.length});
+                const updated = await geocodeClients(clients, (done,total)=>setGeocodeProgress({done,total}));
+                setClients(updated);
+                setGeocoding(false);
+              },style:{background:B.yellow,color:"#0a0f1e",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}},"Geocode Now")
+            )
+          : h('div',{style:{background:"#0d1f0d",border:"1px solid "+B.green+"40",borderRadius:10,padding:"8px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}},
+              h('span',{style:{fontSize:14}},"✅"),
+              h('span',{style:{fontSize:12,color:B.green,fontWeight:600}},geocodedCount+" clients have street-level coordinates · routing is accurate")
+            ),
+      h(Inp,{label:"Optimise for date",type:"date",value:optDate,onChange:setOptDate}),
+      h('div',{style:{height:12}}),
+      h('div',{style:{display:"flex",justifyContent:"space-between",marginBottom:8}},h('span',{style:{fontSize:12,color:B.muted}},selC.length+" clients selected"),h('span',{onClick:()=>setSelC(clients.map(c=>c.id)),style:{fontSize:12,color:B.accent,cursor:"pointer",fontWeight:600}},"Select All")),
+      h('div',{style:{display:"flex",flexDirection:"column",gap:6,maxHeight:260,overflowY:"auto",marginBottom:14}},
+        clients.map(c=>{const zone=gZone(c.postcode);const isSel=selC.includes(c.id);return h('div',{key:c.id,onClick:()=>toggleC(c.id),style:{background:isSel?zone.color+"12":B.input,border:"1px solid "+(isSel?zone.color+"50":B.cardBorder),borderRadius:10,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:10}},
+          h('div',{style:{width:18,height:18,borderRadius:4,border:"2px solid "+(isSel?zone.color:B.muted),background:isSel?zone.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},isSel&&h('span',{style:{color:"#fff",fontSize:10,fontWeight:800}},"✓")),
+          h(Avatar,{name:c.name,color:zone.color,size:28}),
+          h('div',{style:{flex:1}},h('div',{style:{fontWeight:700,fontSize:13,color:B.text}},c.dog+" · "+c.name),h('div',{style:{fontSize:11,color:B.muted}},c.service+" · "+c.duration+"min · "+c.postcode)),
+          h('div',{style:{width:8,height:8,borderRadius:"50%",background:zone.color,flexShrink:0}})
+        );})
+      ),
+      h(Btn,{onClick:runOpt,full:true},"🗺️ Optimise Run")
+    ),
+
+    result&&h('div',{style:{background:B.card,border:"1px solid "+(result.overTime?B.red+"50":B.lime+"50"),borderRadius:16,padding:16,marginBottom:16}},
+      h('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}},
+        h('div',null,h('div',{style:{fontWeight:800,fontSize:16,color:result.overTime?B.red:B.lime}},result.overTime?"⚠️ Over time":"✅ Optimised Run"),h('div',{style:{fontSize:12,color:B.muted}},result.slots.length+" stops · ~"+result.totalDrive+"min drive · finish "+String(result.finishH).padStart(2,"0")+":"+String(result.finishM).padStart(2,"0"))),
+        h(Btn,{small:true,variant:"ghost",onClick:()=>setResult(null)},"✕")
+      ),
+      h('div',{style:{display:"flex",gap:10,alignItems:"center",marginBottom:8}},h('div',{style:{width:24,height:24,borderRadius:"50%",background:B.muted+"20",border:"1.5px solid "+B.muted,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}},"🏠"),h('div',{style:{fontSize:13,color:B.muted}},"Start from home · "+String(sett.startTime).padStart(2,"0")+":00")),
+      result.slots.map((s,i)=>h('div',{key:i},
+        h('div',{style:{display:"flex",gap:10,alignItems:"center",marginBottom:4,paddingLeft:8}},h('div',{style:{width:1,height:16,background:s.zone.color+"40",marginLeft:11}}),h('div',{style:{fontSize:11,color:B.muted}},"🚗 ~"+s.travel+" min")),
+        h('div',{style:{display:"flex",gap:10,alignItems:"center",marginBottom:6}},
+          h('div',{style:{width:24,height:24,borderRadius:"50%",background:s.zone.color+"20",border:"1.5px solid "+s.zone.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:s.zone.color,flexShrink:0}},i+1),
+          h('div',{style:{flex:1,background:s.zone.color+"10",border:"1px solid "+s.zone.color+"30",borderRadius:10,padding:"8px 12px"}},
+            h('div',{style:{display:"flex",justifyContent:"space-between"}},
+              h('div',null,h('div',{style:{fontWeight:700,fontSize:13,color:s.zone.color}},s.client.dog+" · "+s.client.name),h('div',{style:{fontSize:11,color:B.muted}},s.client.service+" · "+s.client.duration+"min"),h('div',{style:{fontSize:11,color:B.muted}},h(AddressLink,{address:s.client.address,postcode:s.client.postcode},s.client.address+", "+s.client.postcode))),
+              h('div',{style:{textAlign:"right"}},h('div',{style:{fontWeight:700,fontSize:13,color:B.text,fontFamily:"monospace"}},fmtT(s.startHour*60+s.startMin)),h('div',{style:{fontSize:11,color:B.muted}},fmtT(s.endTime)))
+            )
+          )
+        )
+      )),
+      h('div',{style:{display:"flex",gap:10,alignItems:"center",marginBottom:16}},h('div',{style:{width:24,height:24,borderRadius:"50%",background:B.muted+"20",border:"1.5px solid "+B.muted,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}},"🏠"),h('div',{style:{fontSize:13,color:B.muted}},"Back home · est. "+String(result.finishH).padStart(2,"0")+":"+String(result.finishM).padStart(2,"0"))),
+      h('div',{style:{display:"flex",gap:8,flexWrap:"wrap"}},h(Btn,{onClick:saveRun,variant:"lime"},"💾 Save to Calendar"),h(Btn,{onClick:openMaps,variant:"secondary"},"🗺️ Open in Maps"))
+    )
+  );
+}
+
+
+
+// ── Smart Reminders Tab
+function RemindersTab({clients,schedule}){
+  const tomorrow = fmt(addDays(new Date(),1));
+  const today_str = fmt(new Date());
+
+  // Auto-populate: get clients scheduled for tomorrow and today
+  const tomorrowSlots = schedule.filter(s=>s.date===tomorrow);
+  const todaySlots = schedule.filter(s=>s.date===today_str);
+  const getClient = id => clients.find(c=>c.id===Number(id));
+
+  const [tab,setTab] = useState("tomorrow");
+  const [customSel,setCustomSel] = useState([]);
+  const [templates,setTemplates] = useState({
+    appointment: "Hi {name}! Just a reminder that {dog}'s {service} appointment is tomorrow at {time}. Please reply YES to confirm or call us to reschedule. — The Perfect Buddy 🐾",
+    sameday: "Good morning {name}! Just a reminder that {dog}'s {service} is today at {time}. We'll see you soon! — The Perfect Buddy 🐾",
+    payment: "Hi {name}! Thanks for today's appointment for {dog}. Your payment of ${amount} is due. Please reply PAY for our bank details. — The Perfect Buddy 🐾",
+    rebook: "Hi {name}! It's been a while since {dog}'s last groom — time to book in again? Reply BOOK or visit our website. — The Perfect Buddy 🐾",
+    custom: "Hi {name}! Just a message from The Perfect Buddy regarding {dog}. ",
+  });
+  const [sent,setSent] = useState([]);
+  const [preview,setPreview] = useState(null);
+  const toggle = id => setCustomSel(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+
+  const buildMsg = (template, client, slot) => {
+    const timeStr = slot ? String(slot.startHour).padStart(2,"0")+":00" : "";
+    return template
+      .replace(/\{name\}/g, client.name.split(" ")[0])
+      .replace(/\{dog\}/g, client.dog)
+      .replace(/\{service\}/g, client.service||"grooming")
+      .replace(/\{time\}/g, timeStr)
+      .replace(/\{amount\}/g, "");
+  };
+
+  const copyAll = (slots, templateKey) => {
+    const msgs = slots.map(s => {
+      const c = getClient(s.clientId);
+      if(!c) return null;
+      return "To: "+c.phone+" ("+c.dog+")\n"+buildMsg(templates[templateKey],c,s);
+    }).filter(Boolean);
+    if(!msgs.length){alert("No clients to message.");return;}
+    navigator.clipboard&&navigator.clipboard.writeText(msgs.join("\n\n"));
+    setSent(p=>[...p,...slots.map(s=>s.clientId+"-"+templateKey)]);
+    alert("✅ "+msgs.length+" message"+(msgs.length>1?"s":"")+" copied!\n\nPaste into your SMS app to send.");
+  };
+
+  const copyCustom = () => {
+    const msgs = customSel.map(id => {
+      const c = clients.find(x=>x.id===id);
+      if(!c) return null;
+      return "To: "+c.phone+" ("+c.dog+")\n"+buildMsg(templates.custom,c,null);
+    }).filter(Boolean);
+    if(!msgs.length){alert("Select at least one client.");return;}
+    navigator.clipboard&&navigator.clipboard.writeText(msgs.join("\n\n"));
+    setSent(p=>[...p,...customSel.map(id=>id+"-custom")]);
+    setCustomSel([]);
+    alert("✅ "+msgs.length+" message"+(msgs.length>1?"s":"")+" copied!");
+  };
+
+  const SlotReminder = ({slot, templateKey, label}) => {
+    const c = getClient(slot.clientId);
+    if(!c) return null;
+    const isSent = sent.includes(c.id+"-"+templateKey);
+    const msg = buildMsg(templates[templateKey],c,slot);
+    return h("div",{style:{background:B.card,border:"1px solid "+(isSent?B.green+"40":B.cardBorder),borderRadius:12,padding:"12px 14px",marginBottom:8,opacity:isSent?0.6:1}},
+      h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:8}},
+        h(Avatar,{name:c.name,color:c.color,size:36}),
+        h("div",{style:{flex:1}},
+          h("div",{style:{fontWeight:700,color:B.text,fontSize:14}},c.name),
+          h("div",{style:{fontSize:12,color:B.muted}},"🐾 "+c.dog+" · "+c.service+" · "+String(slot.startHour).padStart(2,"0")+":00")
+        ),
+        isSent
+          ? h("div",{style:{background:B.green+"20",border:"1px solid "+B.green+"40",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,color:B.green}},"✓ Sent")
+          : h("div",{style:{background:B.accent+"20",border:"1px solid "+B.accent+"40",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,color:B.accent}},String(slot.startHour).padStart(2,"0")+":00")
+      ),
+      h("div",{style:{background:B.input,borderRadius:8,padding:"8px 10px",fontSize:12,color:B.muted,marginBottom:8,fontStyle:"italic"}},
+        msg.length>100?msg.slice(0,100)+"...":msg
+      ),
+      h("div",{style:{display:"flex",gap:6}},
+        h(Btn,{small:true,variant:isSent?"ghost":"teal",onClick:()=>{
+          navigator.clipboard&&navigator.clipboard.writeText(msg);
+          setSent(p=>[...p,c.id+"-"+templateKey]);
+          alert("Copied for "+c.name+"!\n\n"+msg);
+        }},isSent?"📋 Copy Again":"📱 Copy SMS"),
+        h("button",{onClick:()=>setPreview({msg,client:c}),style:{background:"none",border:"none",color:B.muted,fontSize:12,cursor:"pointer"}},"Preview")
+      )
+    );
+  };
+
+  const tabCounts = {
+    tomorrow: tomorrowSlots.length,
+    today: todaySlots.length,
+    custom: clients.filter(c=>(c.status||"Active")==="Active").length,
+  };
+
+  return h("div",null,
+    // Tab switcher
+    h("div",{style:{display:"flex",background:B.card,borderRadius:10,border:"1px solid "+B.cardBorder,padding:3,gap:2,marginBottom:16}},
+      [{id:"tomorrow",icon:"⏰",label:"Tomorrow"},{id:"today",icon:"☀️",label:"Today"},{id:"rebook",icon:"🔁",label:"Rebook"},{id:"custom",icon:"✏️",label:"Custom"}].map(t=>
+        h("button",{key:t.id,onClick:()=>setTab(t.id),style:{flex:1,background:tab===t.id?B.accent:"transparent",color:tab===t.id?"#fff":B.muted,border:"none",borderRadius:8,padding:"7px 2px",fontSize:10,fontWeight:700,cursor:"pointer",position:"relative"}},
+          t.icon+" "+t.label,
+          tabCounts[t.id]>0&&h("span",{style:{background:tab===t.id?"rgba(255,255,255,0.25)":B.accent+"30",color:tab===t.id?"#fff":B.accent,borderRadius:10,padding:"0 4px",marginLeft:3,fontSize:9}},tabCounts[t.id])
+        )
+      )
+    ),
+
+    // TOMORROW tab - auto populated
+    tab==="tomorrow"&&h("div",null,
+      h("div",{style:{background:"linear-gradient(135deg,#0d1a2d,#111827)",border:"1px solid "+B.accent+"40",borderRadius:12,padding:"12px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}},
+        h("span",{style:{fontSize:24}},"⏰"),
+        h("div",{style:{flex:1}},
+          h("div",{style:{fontWeight:700,color:B.accent,fontSize:14}},"Tomorrow's Appointments"),
+          h("div",{style:{fontSize:12,color:B.muted}},tomorrowSlots.length>0?tomorrowSlots.length+" client"+(tomorrowSlots.length>1?"s":"")+" scheduled for "+tomorrow:"No appointments tomorrow")
+        ),
+        tomorrowSlots.length>0&&h(Btn,{small:true,variant:"teal",onClick:()=>copyAll(tomorrowSlots,"appointment")},"Copy All")
+      ),
+      tomorrowSlots.length===0
+        ? h("div",{style:{textAlign:"center",color:B.muted,padding:40,background:B.card,borderRadius:12,fontSize:14}},"No appointments scheduled for tomorrow.\nAdd appointments in the 📅 Calendar tab.")
+        : h("div",null,
+            h("div",{style:{display:"flex",flexDirection:"column",gap:4}},
+              h("div",{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}},"Appointment Reminder Template"),
+              h("textarea",{value:templates.appointment,onInput:e=>setTemplates(p=>({...p,appointment:e.target.value})),rows:3,style:{width:"100%",background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:12,outline:"none",resize:"vertical",boxSizing:"border-box",marginBottom:12}})
+            ),
+            tomorrowSlots.map(s=>h(SlotReminder,{key:s.id,slot:s,templateKey:"appointment",label:"Tomorrow reminder"}))
+          )
+    ),
+
+    // TODAY tab - same day reminders
+    tab==="today"&&h("div",null,
+      h("div",{style:{background:"linear-gradient(135deg,#1a0d00,#111827)",border:"1px solid "+B.yellow+"40",borderRadius:12,padding:"12px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}},
+        h("span",{style:{fontSize:24}},"☀️"),
+        h("div",{style:{flex:1}},
+          h("div",{style:{fontWeight:700,color:B.yellow,fontSize:14}},"Today's Appointments"),
+          h("div",{style:{fontSize:12,color:B.muted}},todaySlots.length>0?todaySlots.length+" client"+(todaySlots.length>1?"s":"")+" today":"No appointments today")
+        ),
+        todaySlots.length>0&&h(Btn,{small:true,onClick:()=>copyAll(todaySlots,"sameday"),variant:"lime"},"Copy All")
+      ),
+      todaySlots.length===0
+        ? h("div",{style:{textAlign:"center",color:B.muted,padding:40,background:B.card,borderRadius:12,fontSize:14}},"No appointments today.")
+        : h("div",null,
+            h("div",{style:{display:"flex",flexDirection:"column",gap:4}},
+              h("div",{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}},"Same-Day Reminder Template"),
+              h("textarea",{value:templates.sameday,onInput:e=>setTemplates(p=>({...p,sameday:e.target.value})),rows:3,style:{width:"100%",background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:12,outline:"none",resize:"vertical",boxSizing:"border-box",marginBottom:12}})
+            ),
+            todaySlots.map(s=>h(SlotReminder,{key:s.id,slot:s,templateKey:"sameday",label:"Same day reminder"}))
+          )
+    ),
+
+    // REBOOK tab - clients due for rebooking based on frequency
+    tab==="rebook"&&h("div",null,
+      h("div",{style:{background:"linear-gradient(135deg,#0d1a0d,#111827)",border:"1px solid "+B.lime+"40",borderRadius:12,padding:"12px 14px",marginBottom:14}},
+        h("div",{style:{fontWeight:700,color:B.lime,fontSize:14,marginBottom:4}},"🔁 Rebooking Nudges"),
+        h("div",{style:{fontSize:12,color:B.muted}},"Clients with no upcoming appointments — may be due for rebooking based on their frequency")
+      ),
+      h("div",{style:{display:"flex",flexDirection:"column",gap:4,marginBottom:12}},
+        h("div",{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}},"Rebooking Message Template"),
+        h("textarea",{value:templates.rebook,onInput:e=>setTemplates(p=>({...p,rebook:e.target.value})),rows:3,style:{width:"100%",background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:12,outline:"none",resize:"vertical",boxSizing:"border-box"}})
+      ),
+      h("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+        clients
+          .filter(c=>(c.status||"Active")==="Active")
+          .filter(c=>!schedule.some(s=>s.clientId===c.id&&s.date>=fmt(new Date())))
+          .slice(0,20)
+          .map(c=>{
+            const isSent=sent.includes(c.id+"-rebook");
+            const msg=buildMsg(templates.rebook,c,null);
+            return h("div",{key:c.id,style:{background:B.card,border:"1px solid "+(isSent?B.green+"40":B.cardBorder),borderRadius:12,padding:"12px 14px",opacity:isSent?0.6:1}},
+              h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:6}},
+                h(Avatar,{name:c.name,color:c.color,size:34}),
+                h("div",{style:{flex:1}},
+                  h("div",{style:{fontWeight:700,color:B.text,fontSize:14}},c.name),
+                  h("div",{style:{fontSize:12,color:B.muted}},"🐾 "+c.dog+(c.frequency?" · 🔄 "+c.frequency:""))
+                ),
+                isSent
+                  ? h("div",{style:{color:B.green,fontSize:12,fontWeight:700}},"✓ Sent")
+                  : h(Btn,{small:true,variant:"ghost",onClick:()=>{
+                      navigator.clipboard&&navigator.clipboard.writeText(msg);
+                      setSent(p=>[...p,c.id+"-rebook"]);
+                      alert("Copied for "+c.name+"!");
+                    }},"📱 SMS")
+              )
+            );
+          }),
+        clients.filter(c=>(c.status||"Active")==="Active").filter(c=>!schedule.some(s=>s.clientId===c.id&&s.date>=fmt(new Date()))).length===0&&
+          h("div",{style:{textAlign:"center",color:B.muted,padding:40,background:B.card,borderRadius:12,fontSize:14}},"All active clients have upcoming appointments 🎉")
+      )
+    ),
+
+    // CUSTOM tab - pick any clients
+    tab==="custom"&&h("div",null,
+      h("div",{style:{display:"flex",flexDirection:"column",gap:4,marginBottom:14}},
+        h("div",{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}},"Custom Message Template"),
+        h("textarea",{value:templates.custom,onInput:e=>setTemplates(p=>({...p,custom:e.target.value})),rows:3,style:{width:"100%",background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:13,outline:"none",resize:"vertical",boxSizing:"border-box"}}),
+        h("div",{style:{fontSize:11,color:B.muted,marginTop:4}},"Use {name}, {dog}, {service} as placeholders")
+      ),
+      h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
+        h("span",{style:{fontSize:13,color:B.muted}},customSel.length+" selected"),
+        h("div",{style:{display:"flex",gap:8}},
+          h(Btn,{small:true,variant:"ghost",onClick:()=>setCustomSel(clients.filter(c=>(c.status||"Active")==="Active").map(c=>c.id))},"All Active"),
+          customSel.length>0&&h(Btn,{small:true,variant:"teal",onClick:copyCustom},"📱 Copy ("+customSel.length+")")
+        )
+      ),
+      h("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+        clients.filter(c=>(c.status||"Active")==="Active").map(c=>
+          h("div",{key:c.id,onClick:()=>toggle(c.id),style:{background:B.card,border:"1px solid "+(customSel.includes(c.id)?c.color:B.cardBorder),borderRadius:10,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:10}},
+            h("div",{style:{width:20,height:20,borderRadius:4,border:"2px solid "+(customSel.includes(c.id)?c.color:B.muted),background:customSel.includes(c.id)?c.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
+              customSel.includes(c.id)&&h("span",{style:{color:"#0a0f1e",fontSize:12,fontWeight:800}},"✓")
+            ),
+            h(Avatar,{name:c.name,color:c.color,size:32}),
+            h("div",{style:{flex:1}},
+              h("div",{style:{fontWeight:700,color:B.text,fontSize:13}},c.name),
+              h("div",{style:{fontSize:11,color:B.muted}},"🐾 "+c.dog+" · 📱 "+c.phone)
+            )
+          )
+        )
+      )
+    ),
+
+    // Preview modal
+    preview&&h(Modal,{title:"SMS Preview",onClose:()=>setPreview(null)},
+      h("div",{style:{background:"#1e2030",borderRadius:12,padding:16,marginBottom:16}},
+        h("div",{style:{fontSize:12,color:B.muted,marginBottom:8}},"To: "+preview.client.phone),
+        h("div",{style:{background:B.teal,color:"#0a0f1e",borderRadius:"16px 16px 4px 16px",padding:"12px 16px",fontSize:14,lineHeight:1.5,display:"inline-block",maxWidth:"85%"}},preview.msg)
+      ),
+      h(Btn,{onClick:()=>{navigator.clipboard&&navigator.clipboard.writeText(preview.msg);setPreview(null);alert("Copied!");},variant:"teal"},"Copy Message")
+    )
+  );
+}
+
+// ── Leads & Waitlist Tab
+function LeadsTab({clients,setClients}){
+  const[tab,setTab]=useState("leads");
+  const[showAdd,setShowAdd]=useState(false);
+  const blank={name:"",dog:"",breed:"",phone:"",address:"",postcode:"",service:SERVICES[0],duration:60,notes:"",status:"Lead",frequency:"6 Weeks",prefDays:[],prefTimes:[],customFrequency:"",inactiveReason:"",enquiryDate:fmt(new Date()),enquirySource:"Phone",priority:"Normal"};
+  const[form,setForm]=useState(blank);
+  const f=(k,v)=>setForm(p=>({...p,[k]:v}));
+
+  const leads=clients.filter(c=>c.status==="Lead");
+  const waitlist=clients.filter(c=>c.status==="Waitlist");
+  const inactive=clients.filter(c=>c.status==="Inactive"||c.status==="Deceased");
+
+  const saveNew=()=>{
+    if(!form.name||!form.dog)return;
+    setClients(p=>[...p,{...form,id:Date.now(),color:PALETTE[p.length%PALETTE.length]}]);
+    setForm(blank);setShowAdd(false);
+  };
+
+  const promote=(client,newStatus)=>{
+    setClients(p=>p.map(c=>c.id===client.id?{...c,status:newStatus}:c));
+  };
+
+  const ClientCard=({client,actions})=>h("div",{style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:12,padding:"12px 14px",marginBottom:8}},
+    h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:6}},
+      h(Avatar,{name:client.name,color:client.color,size:36}),
+      h("div",{style:{flex:1}},
+        h("div",{style:{fontWeight:700,color:B.text,fontSize:14}},client.name),
+        h("div",{style:{fontSize:12,color:B.muted}},"🐾 "+client.dog+(client.breed?" · "+client.breed:""))
+      ),
+      h("div",{style:{background:STATUS_COLORS[client.status]+"20",border:"1px solid "+STATUS_COLORS[client.status]+"50",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700,color:STATUS_COLORS[client.status]}},client.status)
+    ),
+    h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}},
+      client.phone&&h("span",{style:{fontSize:12,color:B.muted}},"📱 "+client.phone),
+      client.postcode&&h("span",{style:{fontSize:12,color:B.muted}},"📍 "+client.postcode),
+      client.enquiryDate&&h("span",{style:{fontSize:12,color:B.muted}},"📅 "+client.enquiryDate)
+    ),
+    client.notes&&h("div",{style:{fontSize:12,color:B.muted,marginBottom:8,padding:"6px 10px",background:B.input,borderRadius:6}},client.notes),
+    h("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},actions)
+  );
+
+  return h("div",null,
+    // Tab switcher
+    h("div",{style:{display:"flex",background:B.card,borderRadius:10,border:"1px solid "+B.cardBorder,padding:3,gap:2,marginBottom:16}},
+      [{id:"leads",label:"Leads",icon:"🔔",count:leads.length},{id:"waitlist",label:"Waitlist",icon:"⏳",count:waitlist.length},{id:"inactive",label:"Inactive",icon:"💤",count:inactive.length}].map(t=>
+        h("button",{key:t.id,onClick:()=>setTab(t.id),style:{flex:1,background:tab===t.id?B.accent:"transparent",color:tab===t.id?"#fff":B.muted,border:"none",borderRadius:8,padding:"7px 4px",fontSize:11,fontWeight:700,cursor:"pointer",position:"relative"}},
+          t.icon+" "+t.label,
+          t.count>0&&h("span",{style:{background:tab===t.id?"rgba(255,255,255,0.3)":B.accent,borderRadius:10,padding:"0 5px",marginLeft:4,fontSize:10}},t.count)
+        )
+      )
+    ),
+
+    tab==="leads"&&h("div",null,
+      h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        h("div",{style:{fontSize:13,color:B.muted}},leads.length+" enquiries"),
+        h(Btn,{small:true,onClick:()=>setShowAdd(true)},"+ New Lead")
+      ),
+      leads.length===0&&h("div",{style:{textAlign:"center",color:B.muted,padding:40,fontSize:14,background:B.card,borderRadius:12}},"No leads yet · tap + New Lead to add an enquiry"),
+      leads.map(c=>h(ClientCard,{key:c.id,client:c,actions:[
+        h(Btn,{key:"active",small:true,variant:"lime",onClick:()=>promote(c,"Active")},"✓ Make Active"),
+        h(Btn,{key:"wait",small:true,variant:"secondary",onClick:()=>promote(c,"Waitlist")},"→ Waitlist"),
+        h(Btn,{key:"del",small:true,variant:"danger",onClick:()=>setClients(p=>p.filter(x=>x.id!==c.id))},"Remove"),
+      ]}))
+    ),
+
+    tab==="waitlist"&&h("div",null,
+      h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        h("div",{style:{fontSize:13,color:B.muted}},waitlist.length+" on waitlist"),
+        h(Btn,{small:true,onClick:()=>{setForm({...blank,status:"Waitlist"});setShowAdd(true);}},"+ Add to Waitlist")
+      ),
+      waitlist.length===0&&h("div",{style:{textAlign:"center",color:B.muted,padding:40,fontSize:14,background:B.card,borderRadius:12}},"No clients on waitlist"),
+      waitlist.map((c,i)=>h(ClientCard,{key:c.id,client:c,actions:[
+        h("span",{key:"pos",style:{fontSize:12,color:B.yellow,fontWeight:700,alignSelf:"center"}},"#"+(i+1)+" in queue"),
+        h(Btn,{key:"active",small:true,variant:"lime",onClick:()=>promote(c,"Active")},"✓ Make Active"),
+        h(Btn,{key:"lead",small:true,variant:"ghost",onClick:()=>promote(c,"Lead")},"← Back to Lead"),
+      ]}))
+    ),
+
+    tab==="inactive"&&h("div",null,
+      h("div",{style:{fontSize:13,color:B.muted,marginBottom:12}},inactive.length+" inactive clients"),
+      inactive.length===0&&h("div",{style:{textAlign:"center",color:B.muted,padding:40,fontSize:14,background:B.card,borderRadius:12}},"No inactive clients"),
+      inactive.map(c=>h(ClientCard,{key:c.id,client:c,actions:[
+        c.status==="Inactive"&&h(Btn,{key:"active",small:true,variant:"lime",onClick:()=>promote(c,"Active")},"✓ Reactivate"),
+        h("span",{key:"reason",style:{fontSize:11,color:B.muted,alignSelf:"center"}},c.inactiveReason||""),
+      ].filter(Boolean)}))
+    ),
+
+    showAdd&&h(Modal,{title:form.status==="Waitlist"?"Add to Waitlist":"New Lead Enquiry",onClose:()=>setShowAdd(false)},
+      h("div",{style:{display:"flex",flexDirection:"column",gap:12}},
+        // Enquiry source
+        h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+          h(Inp,{label:"Enquiry Date",type:"date",value:form.enquiryDate,onChange:v=>f("enquiryDate",v)}),
+          h(Sel,{label:"Source",value:form.enquirySource,onChange:v=>f("enquirySource",v),options:["Phone","Website","Referral","Facebook","Instagram","Walk-in","Other"]})
+        ),
+        h(Sel,{label:"Priority",value:form.priority,onChange:v=>f("priority",v),options:["Normal","High","Urgent"]}),
+        h("div",{style:{height:1,background:B.cardBorder}}),
+        h(Inp,{label:"Client Name *",value:form.name,onChange:v=>f("name",v),placeholder:"Jane Smith"}),
+        h(Inp,{label:"Phone *",value:form.phone,onChange:v=>f("phone",v),placeholder:"0400 000 000"}),
+        h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+          h(Inp,{label:"Dog's Name *",value:form.dog,onChange:v=>f("dog",v),placeholder:"Buddy"}),
+          h(Inp,{label:"Breed",value:form.breed,onChange:v=>f("breed",v),placeholder:"Labrador"})
+        ),
+        h(Inp,{label:"Postcode",value:form.postcode,onChange:v=>f("postcode",v),placeholder:"2508"}),
+        h(Sel,{label:"Service Interested In",value:form.service,onChange:v=>f("service",v),options:SERVICES}),
+        h("div",{style:{display:"flex",flexDirection:"column",gap:4}},
+          h("label",{style:{fontSize:11,color:B.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}},"Notes / Special Requirements"),
+          h("textarea",{value:form.notes,onInput:e=>f("notes",e.target.value),rows:3,placeholder:"Nervous dog, large breed, needs specific time...",style:{background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:14,outline:"none",resize:"vertical",width:"100%"}})
+        ),
+        h(Btn,{onClick:saveNew,full:true},form.status==="Waitlist"?"Add to Waitlist":"Save Lead")
+      )
+    )
+  );
+}
+
+// SMS Tab (simplified)
+const SMS_PROVS=[{id:"burstsms",name:"Burst SMS",flag:"🇦🇺",color:"#00b4d8",desc:"Australian-owned, AEST support. ~$0.09 AUD/text."},{id:"twilio",name:"Twilio",flag:"🌏",color:"#f22f46",desc:"Most popular globally. Free trial. ~$0.08 AUD/text."},{id:"messagebird",name:"MessageBird",flag:"🌐",color:"#2481d7",desc:"Strong AU coverage. ~$0.06 AUD/text."},{id:"vonage",name:"Vonage",flag:"🌐",color:"#9b59b6",desc:"Reliable global carrier. ~$0.07 AUD/text."},{id:"whatsapp",name:"WhatsApp Business",flag:"💬",color:"#25D366",desc:"Free under 1,000 messages/month."}];
+const DEF_SMS={masterOn:false,provider:"",apiKey:"",apiSecret:"",fromNumber:"",reminders:{appointment24h:true,appointmentMorning:false,paymentRequest:true,rebookingNudge:false,rebookWeeks:6},templates:{appointment24h:"Hi {name}! Reminder: {dog}'s {service} is tomorrow at {time}. Reply YES to confirm. — The Perfect Buddy 🐾",appointmentMorning:"Good morning {name}! {dog}'s {service} is today at {time}. See you soon! — The Perfect Buddy 🐾",paymentRequest:"Hi {name}! Thanks for today. Payment of ${amount} is due. Reply PAY for bank details. — The Perfect Buddy 🐾",rebookingNudge:"Hi {name}! Time for {dog}'s next groom? Reply BOOK or visit our website. — The Perfect Buddy 🐾"}};
+function SmsTab(){
+  const[s,setS]=usePersisted("sms",DEF_SMS);
+  const[sec,setSec]=useState("provider");
+  const prov=SMS_PROVS.find(p=>p.id===s.provider);
+  const set=(path,val)=>{setS(prev=>{const next=JSON.parse(JSON.stringify(prev));const parts=path.split(".");let obj=next;for(let i=0;i<parts.length-1;i++)obj=obj[parts[i]];obj[parts[parts.length-1]]=val;return next;});};
+  return h('div',null,
+    h('div',{style:{background:s.masterOn?"linear-gradient(135deg,#0d2010,#111827)":B.card,border:"1px solid "+(s.masterOn?B.lime+"50":B.cardBorder),borderRadius:16,padding:16,marginBottom:16,display:"flex",alignItems:"center",gap:14}},
+      h('div',{style:{flex:1}},h('div',{style:{fontWeight:800,fontSize:16,color:s.masterOn?B.lime:B.text}},"Automatic SMS Reminders"),h('div',{style:{fontSize:12,color:B.muted}},s.masterOn?(prov?"Active via "+prov.name+" · AEST/AEDT":"On — connect a provider below"):"Off — no automatic texts will be sent")),
+      h(Toggle,{on:s.masterOn,onChange:v=>set("masterOn",v),color:B.lime})
+    ),
+    h('div',{style:{display:"flex",background:B.card,borderRadius:10,border:"1px solid "+B.cardBorder,padding:3,gap:2,marginBottom:16}},[{id:"provider",icon:"📡"},{id:"triggers",icon:"⚡"},{id:"templates",icon:"✏️"}].map(t=>h('button',{key:t.id,onClick:()=>setSec(t.id),style:{flex:1,background:sec===t.id?B.accent:"transparent",color:sec===t.id?"#fff":B.muted,border:"none",borderRadius:8,padding:"7px 2px",fontSize:11,fontWeight:700,textTransform:"capitalize"}},t.icon+" "+t.id))),
+    sec==="provider"&&h('div',null,
+      h('div',{style:{fontSize:12,color:B.muted,marginBottom:12}},"Choose your SMS provider. Burst SMS is Australian-owned 🇦🇺"),
+      SMS_PROVS.map(p=>h('div',{key:p.id,onClick:()=>set("provider",p.id),style:{background:s.provider===p.id?p.color+"15":B.card,border:"1px solid "+(s.provider===p.id?p.color+"60":B.cardBorder),borderRadius:12,padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,marginBottom:8}},
+        h('span',{style:{fontSize:22}},p.flag),h('div',{style:{flex:1}},h('div',{style:{fontWeight:700,color:s.provider===p.id?p.color:B.text,fontSize:14}},p.name),h('div',{style:{fontSize:12,color:B.muted}},p.desc)),
+        h('div',{style:{width:18,height:18,borderRadius:"50%",border:"2px solid "+(s.provider===p.id?p.color:B.muted),background:s.provider===p.id?p.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},s.provider===p.id&&h('span',{style:{color:"#fff",fontSize:10,fontWeight:800}},"✓"))
+      )),
+      s.provider&&h('div',{style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:14,padding:16,display:"flex",flexDirection:"column",gap:12,marginTop:8}},
+        h('div',{style:{fontWeight:700,color:B.text}},prov&&prov.flag+" "+prov.name+" Credentials"),
+        h(Inp,{label:s.provider==="twilio"?"Account SID":"API Key",value:s.apiKey,onChange:v=>set("apiKey",v),placeholder:"Enter your key…"}),
+        s.provider!=="whatsapp"&&h(Inp,{label:s.provider==="twilio"?"Auth Token":"API Secret",value:s.apiSecret,onChange:v=>set("apiSecret",v),placeholder:"Enter secret…"}),
+        h(Inp,{label:"Sender Number / Name",value:s.fromNumber,onChange:v=>set("fromNumber",v),placeholder:"+61400000000 or The Perfect Buddy"})
+      )
+    ),
+    sec==="triggers"&&h('div',null,
+      h('div',{style:{fontSize:12,color:B.muted,marginBottom:12}},"All times are AEST/AEDT (NSW/VIC)."),
+      [{key:"appointment24h",icon:"⏰",label:"24hr Reminder",desc:"Sent 24 hours before · AEST/AEDT",color:B.accent},{key:"appointmentMorning",icon:"🌅",label:"Morning of Appointment",desc:"Sent at 8:00am AEST on the day",color:B.yellow},{key:"paymentRequest",icon:"💳",label:"Payment Request",desc:"Sent 30 mins after job end time",color:B.lime},{key:"rebookingNudge",icon:"🔁",label:"Rebooking Nudge",desc:"Sent X weeks after last visit",color:B.purple}].map(t=>h('div',{key:t.key,style:{background:B.card,border:"1px solid "+(s.reminders[t.key]?t.color+"40":B.cardBorder),borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,marginBottom:8}},h('span',{style:{fontSize:22,flexShrink:0}},t.icon),h('div',{style:{flex:1}},h('div',{style:{fontWeight:700,color:s.reminders[t.key]?t.color:B.text,fontSize:14}},t.label),h('div',{style:{fontSize:12,color:B.muted}},t.desc)),h(Toggle,{on:s.reminders[t.key],onChange:v=>set("reminders."+t.key,v),color:t.color})))
+    ),
+    sec==="templates"&&h('div',null,
+      h('div',{style:{fontSize:12,color:B.muted,marginBottom:12}},"Customise each message. Use {name}, {dog}, {service}, {time}, {amount}."),
+      [{key:"appointment24h",icon:"⏰",label:"24hr Reminder"},{key:"appointmentMorning",icon:"🌅",label:"Morning Reminder"},{key:"paymentRequest",icon:"💳",label:"Payment Request"},{key:"rebookingNudge",icon:"🔁",label:"Rebooking Nudge"}].map(t=>h('div',{key:t.key,style:{background:B.card,border:"1px solid "+B.cardBorder,borderRadius:12,padding:14,marginBottom:10}},h('div',{style:{fontWeight:700,color:B.text,fontSize:13,marginBottom:8}},t.icon+" "+t.label),h('textarea',{value:s.templates[t.key],onInput:e=>set("templates."+t.key,e.target.value),rows:3,style:{width:"100%",background:B.input,border:"1px solid "+B.cardBorder,borderRadius:8,padding:"9px 12px",color:B.text,fontSize:13,outline:"none",resize:"vertical",boxSizing:"border-box"}}),h('div',{style:{fontSize:11,color:B.muted,marginTop:4}},s.templates[t.key].length+" chars")))
+    )
+  );
+}
+
+// Root App
+function App(){
+  const[clients,setClients]=usePersisted("clients",initClients);
+  const[schedule,setSchedule]=usePersisted("schedule",initSchedule);
+  const[tab,setTab]=useState("calendar");
+  const todayN=schedule.filter(s=>s.date===fmt(new Date())).length;
+  const TABS=[{id:"clients",label:"Clients",icon:"🐾"},{id:"calendar",label:"Calendar",icon:"📅"},{id:"reminders",label:"Remind",icon:"📱"},{id:"leads",label:"Leads",icon:"🔔"},{id:"sms",label:"SMS",icon:"⚡"}];
+  return h('div',{style:{minHeight:"100vh",background:B.bg}},
+    h('div',{style:{background:B.card,borderBottom:"1px solid "+B.cardBorder,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:50}},
+      h('div',{style:{width:38,height:38,background:"linear-gradient(135deg,"+B.accent+","+B.purple+")",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}},"🏃"),
+      h('div',{style:{flex:1}},
+        h('div',{style:{fontWeight:800,fontSize:18,letterSpacing:"-0.03em",background:"linear-gradient(90deg,"+B.accent+","+B.lime+")",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"BuddyRun"),
+        h('div',{style:{fontSize:11,color:B.muted}},"The Perfect Buddy · "+clients.length+" clients"+(todayN>0?" · "+todayN+" today":""))
+      ),
+      h('div',{style:{background:B.accentSoft,border:"1px solid "+B.accent+"40",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,color:B.accent}},"v2.0")
+    ),
+    h('div',{style:{padding:"18px 16px 90px",maxWidth:600,margin:"0 auto"}},
+      tab==="clients"&&h(ClientsTab,{clients,setClients}),
+      tab==="calendar"&&h(CalendarTab,{clients,schedule,setSchedule}),
+      tab==="run"&&h(RunOptimiserTab,{clients,setClients,schedule,setSchedule}),
+      tab==="reminders"&&h(RemindersTab,{clients,schedule}),
+      tab==="leads"&&h(LeadsTab,{clients,setClients}),
+      tab==="sms"&&h(SmsTab,null)
+    ),
+    h('div',{style:{position:"fixed",bottom:0,left:0,right:0,background:B.card,borderTop:"1px solid "+B.cardBorder,display:"flex",zIndex:50,paddingBottom:"env(safe-area-inset-bottom)"}},
+      TABS.map(t=>h('button',{key:t.id,onClick:()=>setTab(t.id),style:{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 4px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,borderTop:"2px solid "+(tab===t.id?B.accent:"transparent")}},
+        h('span',{style:{fontSize:18}},t.icon),h('span',{style:{fontSize:9,fontWeight:700,color:tab===t.id?B.accent:B.muted}},t.label)
+      ))
+    )
+  );
+}
+
+render(h(App,null),document.getElementById('app'));
+
+</script>
+</body>
+</html>
